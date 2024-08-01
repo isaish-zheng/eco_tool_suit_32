@@ -227,6 +227,7 @@ class MeasureCtrl(object):
                 self.model.a2l_conversions = compu_methods
 
                 # 初始化选择表格数据项内容，保存到视图数据模型
+                self.model.table_measurement_raw_items.clear()
                 for index in range(len(self.model.a2l_measurements)):
                     table_item = TableItem(is_selected='',
                                            name=self.model.a2l_measurements[index].name,
