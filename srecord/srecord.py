@@ -262,6 +262,9 @@ class Srecord(object):
                     raise SrecordException(msg)
         # 判断S3数据记录区域在源文件中是否连续，不连续抛出异常
         for i in range(len(s3records) - 1):
+            if int(s3records[i + 1].start_address32, 16) <= int(s3records[i].start_address32, 16):
+                msg = f'Srecord文件中的S3数据记录在第{s3records[i].raw_file_line_number}行地址非单调递增'
+                raise SrecordException(msg)
             if s3records[i + 1].raw_file_line_number - s3records[i].raw_file_line_number != 1:
                 msg = f'Srecord文件中的S3数据记录在第{s3records[i].raw_file_line_number}行不连续'
                 raise SrecordException(msg)
