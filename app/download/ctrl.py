@@ -5,6 +5,10 @@
 # @version : V1.0.0
 # @function:
 
+"""
+下载程序界面(mvc)的controller模块
+
+"""
 
 ##############################
 # Module imports
@@ -33,18 +37,23 @@ from ..measure.ctrl import MeasureModel, MeasureView, MeasureCtrl
 
 class DownloadCtrl(object):
     """
-    下载界面的业务逻辑处理
+    负责处理下载程序界面事件
+
+    :param model: 界面的数据模型
+    :type model: DownloadModel
+    :param view: 界面的视图
+    :type view: DownloadView
+    :param cfg_path: 下载程序、监视测量对象的配置文件路径
+    :type cfg_path: tuple[str, str]
     """
 
     def __init__(self,
                  model: DownloadModel,
                  view: DownloadView,
-                 cfg_path: tuple[str, str]):
+                 cfg_path: tuple[str, str]) -> None:
         """
-        初始化下载界面业务逻辑处理
-        :param model: 界面的数据模型
-        :param view: 界面的视图
-        :param cfg_path: 各配置文件路径
+        构造函数
+
         """
         self.model = model
         self.view = view
@@ -68,9 +77,10 @@ class DownloadCtrl(object):
         eco_pccp.print_exec_detail = self.text_log  # 打印服务的执行信息
         eco_pccp.DownloadThread.print_detail = self.text_log  # 打印下载任务的执行信息
 
-    def try_reset_pcan_device(self):
+    def try_reset_pcan_device(self) -> None:
         """
         尝试复位pcan设备
+
         """
         try:
             obj_pcan = pcanbasic.PCANBasic()
@@ -86,18 +96,23 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def text_log(self, txt: str, *args, **kwargs):
+    def text_log(self, txt: str, *args, **kwargs) -> None:
         """
-        向text_info控件写入信息
+        向文本显示框写入信息
+
         :param txt: 待写入的信息
-        :param args: 位置参数列表，第一个参数为文字颜色
+        :type txt: str
+        :param args: 位置参数，第一个参数为文字颜色
                     None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
+        :param kwargs: 关键字参数（未使用）
         """
 
-        def get_str_time():
+        def get_str_time() -> str:
             """
             获取当前时间，格式化字符串"%Y/%m/%d %H:%M:%S"
+
             :return: 当前时间
+            :rtype: str
             """
             time_now = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())  # 时间戳
             return str(time_now)
@@ -117,9 +132,10 @@ class DownloadCtrl(object):
         self.view.text_info.see(END)
         self.view.text_info.tag_config(tagName=color, foreground=color)
 
-    def ini_config(self):
+    def ini_config(self) -> None:
         """
         初始化配置文件，若配置文件不存在，则新建配置
+
         """
         try:
             if not os.path.isfile(self.__cfg_download_path):
@@ -159,9 +175,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def load_config(self):
+    def load_config(self) -> None:
         """
-        加载配置文件到视图数据模型，根据配置中的mode，加载指定的参数
+        加载配置文件中的配置保存到界面的model中
+
         """
         try:
             conf = configparser.ConfigParser()
@@ -192,10 +209,12 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def save_config(self, is_old: bool = False):
+    def save_config(self, is_old: bool = False) -> None:
         """
-        保存配置到配置文件
+        保存需要的配置项到配置文件
+
         :param is_old: 是否保存上一配置，eg：若True，则当前为CCP时，执行保存UDS配置
+        :type is_old: bool
         """
         try:
             conf = configparser.ConfigParser()
@@ -217,9 +236,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_closing(self):
+    def handler_on_closing(self) -> None:
         """
-        关闭tkui窗口时触发的功能，若下载任务未结束，则不执行关闭窗口操作
+        关闭界面窗口前执行，若有任务未结束，则不执行关闭窗口
+
         """
         try:
             # print("当前线程数量为", threading.active_count())
@@ -240,9 +260,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_show_uds_map_detail(self):
+    def handler_on_show_uds_map_detail(self) -> None:
         """
-        tkui对象中的文件菜单下的‘uds->显示id映射详情’触发的功能
+        点击窗口中文件菜单下的‘uds->显示id映射详情’时执行，开启时，在文本显示框将显示uds刷写过程中的id映射详情，关闭时，将不显示
+
         """
         try:
             # 若为uds刷写则允许操作,否则保持为配置文件中参数
@@ -259,9 +280,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_show_uds_msg_detail(self):
+    def handler_on_show_uds_msg_detail(self) -> None:
         """
-        tkui对象中的文件菜单下的‘uds->显示消息详情’触发的功能
+        点击窗口中文件文件菜单下的‘uds->显示消息详情’时执行，开启时，在文本显示框将显示uds刷写过程中的消息详情，关闭时，将不显示
+
         """
         try:
             # 若为uds刷写则允许操作,否则保持为配置文件中参数
@@ -278,16 +300,18 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_select_mode_protocol(self):
+    def handler_on_select_mode_protocol(self) -> None:
         """
-        tkui对象中的下拉控件选择刷写协议触发的功能
+        改变窗口中刷写协议下拉控件中内容时执行，会切换刷写协议并将改变前的配置保存到配置文件中
+
         """
         self.save_config(True)
         self.load_config()
 
-    def handler_on_open_download_file(self):
+    def handler_on_open_download_file(self) -> None:
         """
-        ui对象中的打开下载文件触发的功能
+        点击窗口中打开按钮时执行，选择程序文件后会在文本显示框显示程序的信息
+
         """
         try:
             # 打开下载文件路径
@@ -306,9 +330,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_open_seed2key_file(self):
+    def handler_on_open_seed2key_file(self) -> None:
         """
-        ui对象中的打开密钥文件触发的功能
+        点击窗口中秘钥按钮时执行，选择秘钥文件后会在文本显示框显示秘钥的信息
+
         """
         try:
             # 打开文件路径
@@ -318,9 +343,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_download_thread(self):
+    def handler_on_download_thread(self) -> None:
         """
-        tkui对象中的下载按钮触发的功能,令起线程
+        点击窗口中下载按钮时执行，会根据当前刷写协议启动相应的下载线程
+
         """
         try:
             conf = configparser.ConfigParser()
@@ -360,9 +386,10 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_open_measure_ui(self):
+    def handler_on_open_measure_ui(self) -> None:
         """
-        ui对象中的测量按钮触发的功能
+        点击窗口中文件菜单下的CCP测量时执行，将打开测量界面
+
         """
         try:
             # 创建view
@@ -388,12 +415,13 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def __open_file(self, filetype: str, **kwargs):
+    def __open_file(self, filetype: str, **kwargs) -> None:
         """
-        打开文件
+        弹出文件对话框，打开指定类型的文件
+
         :param filetype: 文件类型
+        :type filetype: str
         :param kwargs: 关键字参数，lbl为显示已打开文件路径的标签控件，dir为要打开文件的初始路径
-        :return:
         """
         if filetype == '下载':
             fileformat = '.mot'
@@ -435,10 +463,13 @@ class DownloadCtrl(object):
             self.text_log('路径无效，未选择' + filetype + '文件' + openpath, 'warning')
 
     @staticmethod
-    def __text_none(txt: str, *args, **kwargs):
+    def __text_none(txt: str, *args, **kwargs) -> None:
         """
-        text_log等打印功能的重载函数，无操作
+        空函数，
+        用于重载text_log等输出文本信息功能的重载函数，无操作
+
         :param txt: 待写入的信息
+        :type txt: str
         :param args: 位置参数列表，第一个参数为文字颜色
             None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
         :param kwargs: 关键字参数列表，未用

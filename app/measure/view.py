@@ -11,6 +11,7 @@
 ##############################
 
 import base64  # Base64编码解码模块
+from typing import Any
 
 from tkui import icon
 from tkui.tktypes import *
@@ -27,6 +28,9 @@ from .model import MeasureModel
 class MeasureView(tk.Toplevel, GetDpiMixIn):
     """
     测量视图，子窗口
+
+    :param master: 父窗口
+    :type master: tk.Tk
     """
 
     WIDTH_ROOT_WINDOW = 1200
@@ -37,7 +41,8 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
 
     def __init__(self,
                  master: tk.Tk,
-                 ):
+                 ) -> None:
+        """构造函数"""
         # 操作系统使用程序自身的dpi适配
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
         super().__init__(master=master)
@@ -47,24 +52,31 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         # self.grab_set()
         self.transient(master)
 
-    def set_presenter(self, presenter):
+    def set_presenter(self, presenter: Any) -> None:
         """
         设置presenter，presenter中含一系列方法，用于处理界面事件
+
+        :param presenter: presenter
+        :type presenter: Any
         """
         self.presenter = presenter
         # 窗口点击关闭触发的功能
         self.protocol('WM_DELETE_WINDOW', lambda: self.presenter.handler_on_closing())
 
     @staticmethod
-    def show_warning(msg: str):
+    def show_warning(msg: str) -> None:
         """
         显示警告弹窗
+
+        :param msg: 警告信息
+        :type msg: str
         """
         messagebox.showwarning(title='警告', message=msg)
 
-    def set_root(self):
+    def set_root(self) -> None:
         """
-        设置窗口
+        设置根窗口
+
         """
         # root = tk.Tk()
         self.title("Eco Viewer")
@@ -84,9 +96,10 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         self.iconbitmap('tmp.ico')
         os.remove('tmp.ico')
 
-    def set_root_menu(self):
+    def set_root_menu(self) -> None:
         """
         设置根窗口菜单
+
         """
         # 窗口绑定菜单栏
         menu_bar = tk.Menu(self)
@@ -106,9 +119,12 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         # 文件菜单绑定退出按钮
         file_menu.add_command(label="退出", command=lambda: self.presenter.handler_on_closing())
 
-    def set_measure_selection_frame(self, model: MeasureModel):
+    def set_measure_selection_frame(self, model: MeasureModel) -> None:
         """
         设置测量数据项选择界面
+
+        :param model: 测量视图的数据模型
+        :type model: MeasureModel
         """
 
         # 设置区域容器
@@ -219,6 +235,9 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
     def set_measure_monitor_frame(self, model: MeasureModel):
         """
         设置数据项监视界面
+
+        :param model: 测量视图的数据模型
+        :type model: MeasureModel
         """
 
         # 设置区域容器
@@ -337,6 +356,9 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
     def set_measure_property_frame(self, model: MeasureModel):
         """
         设置数据项属性界面
+
+        :param model: 测量视图的数据模型
+        :type model: MeasureModel
         """
 
         # 设置区域容器

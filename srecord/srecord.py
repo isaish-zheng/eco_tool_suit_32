@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @author  : ZYD
 # @version : V1.0.0
-# @function: V1.0.0：
+# @function:
 """
 解析.mot/.s19/.srec格式的SRecord记录文件,
 获取S0中的描述信息保存在属性describe_info:str，
@@ -31,8 +31,6 @@ CheckSum：一个字节长度，2个十六进制字符，表示Byte count、Addr
 # Module imports
 ##############################
 
-from typing import List
-
 from utils import pad_hex
 from utils import Crc32Bzip2 as Crc32
 
@@ -43,12 +41,15 @@ from utils import Crc32Bzip2 as Crc32
 
 class SrecordException(Exception):
     """
-    自定义Srecord异常
+    Srecord异常类
+
+    :param message: 要显示的异常消息
+    :type message: str
     """
 
     def __init__(self, message: str):
         """
-        :param message: 要显示的异常消息
+        构造函数
         """
         self.message = message
 
@@ -59,6 +60,19 @@ class SrecordException(Exception):
 class S3Record(object):
     """
     存储一条S3数据记录的信息
+
+    :param line_number: 本条数据记录在当前S3Record列表中的序号(0基)
+    :type line_number: int
+    :param raw_file_line_number: 本条数据记录在源文件中的行号(1基)
+    :type raw_file_line_number: int
+    :param record_type: 本条数据记录类型(例如'S3')
+    :type record_type: str
+    :param data_length: 本条数据记录数据长度(单位Byte)
+    :type data_length: int
+    :param start_address32: 本条数据记录32位起始地址(0x开头16进制)
+    :type start_address32: str
+    :param data: 本条数据记录有效数据(16进制序列)
+    :type data: str
     """
 
     def __init__(self,
@@ -68,24 +82,29 @@ class S3Record(object):
                  data_length: int,
                  start_address32: str,
                  data: str
-                 ):
+                 ) -> None:
         self.line_number = line_number  # 本条数据记录在列表中的行号(0基)
         self.raw_file_line_number = raw_file_line_number  # 本条数据记录在源文件中的行号(1基)
-        self.record_type = record_type  # 本条数据记录类型
-        self.data_length = data_length  # 本条数据记录数据长度(Byte)
-        self.start_address32 = start_address32  # 本条数据记录32位起始地址
-        self.data = data  # 本条数据记录有效数据
+        self.record_type = record_type  # 本条数据记录类型(例如S3)
+        self.data_length = data_length  # 本条数据记录数据长度(单位Byte)
+        self.start_address32 = start_address32  # 本条数据记录32位起始地址(0x开头16进制)
+        self.data = data  # 本条数据记录有效数据(16进制形式序列)
 
 
 class EraseMemoryRecord(object):
     """
     存储一段擦写内存的首尾行记录
+
+    :param begin_record: 擦写内存块的首行记录
+    :type begin_record: S3Record
+    :param end_record: 擦写内存块的尾行记录
+    :type end_record: S3Record
     """
 
     def __init__(self,
                  begin_record: S3Record = None,
                  end_record: S3Record = None,
-                 ):
+                 ) -> None:
         self.begin_record = begin_record  # 擦写内存块的首行记录
         self.end_record = end_record  # 擦写内存块的尾行记录
 
@@ -93,6 +112,17 @@ class EraseMemoryRecord(object):
 class EraseMemoryInfo(object):
     """
     一段擦写内存的信息
+
+    :param erase_number: 擦写内存段的标号(第几段连续内存区域)
+    :type erase_number: int
+    :param erase_start_address32: 本段擦写内存的起始地址(0x开头16进制)
+    :type erase_start_address32: str
+    :param erase_length: 本段擦写内存的长度，单位Byte(0x开头16进制)
+    :type erase_length: str
+    :param erase_data: 本段擦写数据(16进制序列)
+    :type erase_data: str
+    :param erase_memory_record: 本段擦写内存的首尾行记录
+    :type erase_memory_record: EraseMemoryRecord
     """
 
     def __init__(self,
@@ -102,6 +132,9 @@ class EraseMemoryInfo(object):
                  erase_data: str,
                  erase_memory_record: EraseMemoryRecord
                  ):
+        """
+        构造函数
+        """
         self.erase_number = erase_number  # 擦写内存段的标号(第几段连续内存区域)
         self.erase_start_address32 = erase_start_address32  # 本段擦写内存的起始地址
         self.erase_length = erase_length  # 本段擦写内存的长度Byte
@@ -115,7 +148,10 @@ class EraseMemoryInfo(object):
 
 class Srecord(object):
     """
-    解析SRecord文件，处理S3数据记录，获取内存擦写信息
+    解析SRecord文件，处理S3数据记录，获取内存擦写信息、校验信息等
+
+    :param filepath: SRecord文件路径
+    :type filepath: str
     """
     srecord_type_dic = {
         # 记录头16位地址，主要描述供应商相关信息，比如文件、产品、供应商等信息
@@ -143,9 +179,9 @@ class Srecord(object):
         'pgm_start_addr16': 'S9',
     }
 
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str) -> None:
         """
-        :param filepath: SRecord文件路径
+        构造函数
         """
         self.__check_all_sum(filepath)
         (self.__s3_records,
@@ -156,29 +192,39 @@ class Srecord(object):
                                                                   self.__erase_memory_records)
         self.__crc32_values = self.__get_crc32_values()
 
-    def get_epk(self, epk_addr: str):
+    def get_epk(self, epk_addr: str) -> str | None:
         """
         获取epk
-        :return: 若存在返回epk，否则返回None
+
+        :param epk_addr: epk信息首地址(0x开头的16进制)
+        :type epk_addr: str
+        :return: 若存在返回epk(16进制序列)，否则返回None
+        :rtype: str or None
         """
-        all_erase_datas = []
         for erase_memory_info in self.__erase_memory_infos:
             if int(erase_memory_info.erase_start_address32, 16) == int(epk_addr, 16):
                 return erase_memory_info.erase_data
 
     @staticmethod
-    def __check_all_sum(filepath: str):
+    def __check_all_sum(filepath: str) -> bool:
         """
-        校验Srecord文件的checksum
-        :return: 若校验通过返回None，否则抛出在第几行校验错误的异常
+        校验Srecord文件各行的checksum
+
+        :return: 若校验通过返回True
+        :rtype: bool
+        :raises SrecordException: 某行校验错误
         """
 
-        def checksum(record: str):
+        def checksum(record: str) -> str:
             """
-            长度、地址和数据参与checksum运算，类型、校验和不参与校验
+            计算一条记录的校验和，
+            长度、地址和数据参与checksum运算，类型、校验和不参与校验，
             运算公式为：校验和=0xff – (长度 + 地址 + 数据)
+
             :param record: 一条记录
-            :return: 本条记录的校验和
+            :type record: str
+            :return: 本条记录的校验和(一个字节的16进制序列)
+            :rtype: str
             """
             # 去除类型、校验和
             check_string = record[2:-2]
@@ -207,13 +253,15 @@ class Srecord(object):
                     raise SrecordException(msg)
         return True
 
-    def __get_s3records(self, filepath: str):
+    def __get_s3records(self, filepath: str) ->  tuple[list[S3Record], str, list[int]]:
         """
-        解析SRecord文件，将每条S3即32位地址的数据记录以列表形式保存到一个列表中
+        解析SRecord文件，将每条S3即32位地址的数据记录以列表形式保存，获取S0信息以及S7程序起始地址
+
         :param filepath: SRecord文件路径
-        :return: 解析后的S3数据记录列表,每条记录以列表形式保存为
-            [line_number:int, raw_file_line_number:int,
-            record_type:str, data_length:str, start_address32:str, data:str]
+        :type filepath: str
+        :return: 解析后的S3数据记录列表, S0中的描述信息, S7中的程序起始地址信息
+        :rtype: tuple[list[S3Record], str, list[int]]
+        :raises SrecordException: 某行内容为空；某行类型无法处理；某行地址不递增；某行不连续
         """
         describe_info = ''  # 保存S0中的描述信息
         pgm_start_addr = []  # 保存S7中程序起始地址信息
@@ -272,11 +320,14 @@ class Srecord(object):
         return s3records, describe_info, pgm_start_addr
 
     @staticmethod
-    def __get_erase_memory_records(records: List[S3Record]):
+    def __get_erase_memory_records(records: list[S3Record]) -> list[EraseMemoryRecord]:
         """
-        从S3数据记录列表中提取出所有擦写内存区域的首尾行信息
+        从S3数据记录列表中提取出所有擦写内存区域的首尾行记录
+
         :param records: S3数据记录列表
+        :type records: list[S3Record]
         :return: 擦写内存区域首尾行数据记录的列表
+        :rtype: list[EraseMemoryRecord]
         """
         erase_memory_records = []
         erase_memory_record = EraseMemoryRecord(begin_record=records[0],
@@ -296,22 +347,31 @@ class Srecord(object):
         return erase_memory_records
 
     def __get_erase_memory_infos(self,
-                                 records: List[S3Record],
-                                 erase_memory_records: List[EraseMemoryRecord]):
+                                 records: list[S3Record],
+                                 erase_memory_records: list[EraseMemoryRecord]) -> list[EraseMemoryInfo]:
         """
         从S3数据记录列表中提取出所有擦写内存区域的首尾行信息
+
         :param records: S3数据记录列表
+        :type records: list[S3Record]
         :param erase_memory_records: 包含擦写内存区域的首尾行记录的列表
+        :type erase_memory_records: list[EraseMemoryRecord]
         :return: 包含每个擦写内存区域信息的列表
+        :rtype: list[EraseMemoryInfo]
         """
 
-        def get_erase_data(records: List[S3Record], begin_line_number: int, end_line_number: int):
+        def get_erase_data(records: list[S3Record], begin_line_number: int, end_line_number: int) -> str:
             """
             获取一块擦写内存区域的数据
+
             :param records: S3数据记录列表
-            :param begin_line_number: 擦写区域的首行
-            :param end_line_number: 擦写区域的尾行
-            :return: 擦写区域的数据
+            :type records: list[S3Record]
+            :param begin_line_number: 擦写区域的首行序号
+            :type begin_line_number: int
+            :param end_line_number: 擦写区域的尾行序号
+            :type end_line_number: int
+            :return: 擦写区域的数据(16进制序列)
+            :rtype: str
             """
             erase_data = []
             for i in range(begin_line_number, end_line_number + 1):
@@ -344,10 +404,12 @@ class Srecord(object):
         # 返回
         return erase_memory_infos
 
-    def __get_crc32_values(self):
+    def __get_crc32_values(self) -> list[int]:
         """
         计算所有擦写数据段的数据CRC32校验值
+
         :return: 返回一个包含4个字节的列表，表示CRC32校验值，例如：[252, 137, 25, 24]，即b'\xfc\x89\x19\x18'，0xFC891918
+        :rtype: list[int]
         """
         all_erase_datas = []
         for erase_memory_info in self.__erase_memory_infos:
@@ -364,22 +426,52 @@ class Srecord(object):
 
     @property
     def describe_info(self) -> str:
+        """
+        S0描述信息
+
+        :return: S0描述信息
+        :rtype: str
+        """
         return self.__describe_info
 
     @property
-    def pgm_start_addr(self) -> List[int]:
+    def pgm_start_addr(self) -> list[int]:
+        """
+        S7程序起始地址
+
+        :return: S7程序起始地址
+        :rtype: list[int]
+        """
         return self.__pgm_start_addr
 
     @property
-    def s3records(self):
+    def s3records(self) -> list[S3Record]:
+        """
+        S3记录
+
+        :return: S3记录
+        :rtype: list[S3Record]
+        """
         return self.__s3_records
 
     @property
-    def erase_memory_infos(self):
+    def erase_memory_infos(self) -> list[EraseMemoryInfo]:
+        """
+        擦写内存信息
+
+        :return: 擦写内存信息
+        :rtype: list[EraseMemoryInfo]
+        """
         return self.__erase_memory_infos
 
     @property
-    def crc32_values(self):
+    def crc32_values(self) -> list[int]:
+        """
+        所有擦写内容的CRC32校验值
+
+        :return: CRC32校验值
+        :rtype: list[int]
+        """
         return self.__crc32_values
 
 

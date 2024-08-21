@@ -19,8 +19,11 @@ import base64
 def dealicon(open_path: str, save_path: str):
     """
     将.ico文件转换为.py文件
+
     :param open_path: .ico文件路径
+    :type open_path: str
     :param save_path: .py文件路径
+    :type save_path: str
     """
     open_icon = open(open_path, "rb")
     b64str = base64.b64encode(open_icon.read())

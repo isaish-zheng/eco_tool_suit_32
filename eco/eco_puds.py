@@ -36,18 +36,18 @@ IS_PRINT_MSG_DETAIL = False  # 是否打印消息细节,二级
 IS_PRINT_MAP_DETAIL = False  # 是否打印地址映射细节,三级
 
 
-def wait_getch_and_clear():
+def wait_getch_and_clear() -> None:
     """
     等待用户输入并清屏
     """
 
-    def get_input():
+    def get_input() -> None:
         """
         等待输入
         """
         sys.stdin.read(1)
 
-    def clear_console():
+    def clear_console() -> None:
         """
         清屏
         """
@@ -62,28 +62,40 @@ def wait_getch_and_clear():
         clear_console()
 
 
-def print_exec_detail(txt: str, *args, **kwargs):
+def print_exec_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印任务执行细节,可以根据鸭子类型，进行重定向
+    打印任务执行细节，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_EXEC_DETAIL:
         print(txt)
 
 
-def print_msg_detail(txt: str, *args, **kwargs):
+def print_msg_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印消息数据信息,可以根据鸭子类型，进行重定向
+    打印消息数据信息，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_MSG_DETAIL:
         print(txt)
 
 
-def print_map_detail(txt: str, *args, **kwargs):
+def print_map_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印地址映射信息,可以根据鸭子类型，进行重定向
+    打印地址映射信息，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_MAP_DETAIL:
         print(txt)
@@ -95,12 +107,15 @@ def print_map_detail(txt: str, *args, **kwargs):
 
 class EcoPudsException(Exception):
     """
-    自定义EcoPudsFlash异常
+    EcoPudsFlash异常
+
+    :param message: 要显示的异常消息
+    :type message: str
     """
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         """
-        :param message: 要显示的异常消息
+        构造函数
         """
         self.message = message
 
@@ -111,12 +126,16 @@ class EcoPudsException(Exception):
 class ExecResult(object):
     """
     每一个操作的执行结果类型
+
+    :param is_success: 操作是否成功
+    :type is_success: bool
+    :param data: 操作返回的数据
+    :type data: Any
     """
 
-    def __init__(self, is_success: bool = None, data: Any = None):
+    def __init__(self, is_success: bool = None, data: Any = None) -> None:
         """
-        :param is_success: 操作是否成功
-        :param data: 操作返回的数据
+        构造函数
         """
         self.is_success = is_success
         self.data = data
@@ -195,6 +214,19 @@ class Nrc(NamedTuple):
 class EcoPudsFunc(object):
     """
     EcoPudsFlash类，用于实现Pcan设备通过UDS协议刷写优控VCU程序
+
+    :param channel: Pcan设备通道
+    :type channel: ctypes.c_uint32
+    :param baudrate: Pcan设备波特率
+    :type baudrate: ctypes.c_uint32
+    :param tester_can_id: 诊断仪的CAN_ID
+    :type tester_can_id: int
+    :param ecu_can_id: ECU的CAN_ID
+    :type ecu_can_id: int
+    :param broadcast_can_id: 广播CAN_ID
+    :type broadcast_can_id: int
+    :param is_stop_if_msg_error: 若为True，当消息错误时停止执行并抛出异常
+    :type is_stop_if_msg_error: bool
     """
 
     def __init__(self,
@@ -203,14 +235,9 @@ class EcoPudsFunc(object):
                  tester_can_id: int,
                  ecu_can_id: int,
                  broadcast_can_id: int,
-                 is_stop_if_msg_error: bool = True):
+                 is_stop_if_msg_error: bool = True) -> None:
         """
-        :param channel: Pcan设备通道
-        :param baudrate: Pcan设备波特率
-        :param tester_can_id: 诊断仪的CAN_ID
-        :param ecu_can_id: ECU的CAN_ID
-        :param broadcast_can_id: 广播CAN_ID
-        :param is_stop_if_msg_error: 若为True，当消息错误时停止执行并抛出异常
+        构造函数
         """
         self.obj_puds = pcanuds.PCAN_UDS_2013()
         self.transmission_error_number = 0
@@ -233,10 +260,12 @@ class EcoPudsFunc(object):
         self.ecu_can_id = ecu_can_id
         self.broadcast_can_id = broadcast_can_id
 
-    def __free_msg(self, msgs: List[pcanuds.uds_msg]):
+    def __free_msg(self, msgs: list[pcanuds.uds_msg]) -> None:
         """
         释放uds_msg对象资源
+
         :param msgs: 包含uds_msg对象的列表
+        :type msgs: list[pcanuds.uds_msg]
         """
         for msg in msgs:
             status = self.obj_puds.MsgFree_2013(msg)
@@ -247,13 +276,19 @@ class EcoPudsFunc(object):
     def __display_uds_msg(self,
                           request: pcanuds.uds_msg,
                           response: pcanuds.uds_msg,
-                          no_response_expected: bool):
+                          no_response_expected: bool) -> bool:
         """
         显示UDS请求和响应消息(若没有响应或响应不符合预期则进行错误计数)
+
         :param request: 请求消息
+        :type request: pcanuds.uds_msg
         :param response: 响应消息
+        :type response: pcanuds.uds_msg
         :param no_response_expected: 若不需要响应，则不会进行错误计数
+        :type no_response_expected: bool
         :return: 若响应符合预期则返回True
+        :rtype: bool
+        :raises EcoPudsException: 请求消息发送失败；响应消息接收失败；响应消息为空；响应消息非预期
         """
         if request and request.msg.msgdata.isotp:
             msg = ("UDS请求消息 -> 结果: %i - %s\n"
@@ -305,9 +340,13 @@ class EcoPudsFunc(object):
                        f'\tnrc={hex(response.links.nrc.contents.value)}')
                 raise EcoPudsException(msg)
 
-    def initialize_device(self):
+    def initialize_device(self) -> ExecResult:
         """
-        初始化设备
+        初始化设备并设置时间参数
+
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 初始化设备失败；设置时间参数失败
         """
         # 初始化
         status = self.obj_puds.Initialize_2013(self.channel, self.baudrate, 0, 0, 0)
@@ -336,9 +375,13 @@ class EcoPudsFunc(object):
             raise EcoPudsException(msg)
         return exec_result
 
-    def uninitialize_device(self):
+    def uninitialize_device(self) -> ExecResult:
         """
         关闭设备
+
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 关闭设备失败
         """
         status = self.obj_puds.Uninitialize_2013(self.channel)
         text = pcanuds.create_string_buffer(256)
@@ -354,10 +397,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def set_mapping(self,
-                    mapping_type: str):
+                    mapping_type: str) -> ExecResult:
         """
         设置节点CAN_ID与UDS_NAI的映射关系
+
         :param mapping_type: 'tester'：tester与ecu映射；'ecu'：ecu与tester映射；'broadcast'：broadcast与ecu的映射
+        :type mapping_type: str
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；设置映射关系失败
         """
         mapping = pcanuds.uds_mapping()
         mapping.can_msgtype = pcanuds.PCANTP_CAN_MSGTYPE_STANDARD
@@ -407,10 +455,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def get_mapping(self,
-                    can_id: int):
+                    can_id: int) -> ExecResult:
         """
         获取节点CAN_ID与其UDS_NAI的映射关系
+
         :param can_id: 节点CAN_ID
+        :type can_id: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 获取映射关系失败
         """
         mapping = pcanuds.uds_mapping()
         status = self.obj_puds.GetMapping_2013(self.channel, mapping, can_id, pcanuds.PCANTP_CAN_MSGTYPE_STANDARD)
@@ -437,10 +490,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def remove_mapping_by_can_id(self,
-                                 can_id: int):
+                                 can_id: int) -> ExecResult:
         """
-        清楚节点CAN_ID与其UDS_NAI的映射关系
+        清除节点CAN_ID与其UDS_NAI的映射关系
+
         :param can_id: 节点CAN_ID
+        :type can_id: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 清除映射关系失败
         """
         status = self.obj_puds.RemoveMappingByCanId_2013(self.channel, can_id)
         text = pcanuds.create_string_buffer(256)
@@ -456,10 +514,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def diagnostic_session_control(self,
-                                   session_type: int):
+                                   session_type: int) -> ExecResult:
         """
         诊断会话控制
+
         :param session_type: 会话类型
+        :type session_type: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；切换诊断会话模式失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -501,12 +564,19 @@ class EcoPudsFunc(object):
     def routine_control(self,
                         control_type: int,
                         routine_id: int,
-                        data: List[int] = None):
+                        data: list[int] = None) -> ExecResult:
         """
         例行程序控制
+
         :param control_type: 控制类型
+        :type control_type: int
         :param routine_id: 任务ID
+        :type routine_id: int
         :param data: 包含数据的列表
+        :type data: list[int]
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；例行程序控制失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -574,10 +644,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def control_dtc_setting(self,
-                            setting_type: int):
+                            setting_type: int) -> ExecResult:
         """
         控制DTC设置
+
         :param setting_type: 设置类型
+        :type setting_type: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；控制DTC设置失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -620,11 +695,17 @@ class EcoPudsFunc(object):
 
     def communication_control(self,
                               control_type: int,
-                              communication_type: int):
+                              communication_type: int) -> ExecResult:
         """
         通讯控制
+
         :param control_type: 控制类型
+        :type control_type: int
         :param communication_type: 通讯类型
+        :type communication_type: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；通讯控制失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -664,10 +745,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def read_data_by_id(self,
-                        did: int):
+                        did: int) -> ExecResult:
         """
         通过ID读数据
+
         :param did: 数据ID
+        :type did: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 读取数据失败
         """
         data_identifier = ctypes.c_uint16(did)
         request = pcanuds.uds_msg()
@@ -698,11 +784,17 @@ class EcoPudsFunc(object):
 
     def security_access(self,
                         access_type: int,
-                        data: List[int] = None):
+                        data: list[int] = None) -> ExecResult:
         """
         安全访问
+
         :param access_type: 访问类型
+        :type access_type: int
         :param data: 包含数据的列表
+        :type data: list[int]
+        :return: 执行结果ExecResult，ExecResult.data中含有seed数据
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；安全访问失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -753,12 +845,17 @@ class EcoPudsFunc(object):
 
     def request_download(self,
                          memory_address: List[int],
-                         memory_size: List[int]):
+                         memory_size: List[int]) -> ExecResult:
         """
         请求下载
+
         :param memory_address: 内存起始地址，包含4字节数据的列表
+        :type memory_address: list[int]
         :param memory_size: 内存长度Byte，包含4字节数据的列表
-        :return: 返回'ecu'请求传输数据的block_size
+        :type memory_size: list[int]
+        :return: 执行结果ExecResult，ExecResult.data中含有block_size
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；请求下载失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -805,11 +902,17 @@ class EcoPudsFunc(object):
 
     def transfer_data(self,
                       block_sequence_counter: int,
-                      data: List[int]):
+                      data: list[int]) -> ExecResult:
         """
         数据传输
+
         :param block_sequence_counter: 块序列计数器
+        :type block_sequence_counter: int
         :param data: 数据列表
+        :type data: list[int]
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；数据传输失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -850,10 +953,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def request_transfer_exit(self,
-                              data: List[int] = None):
+                              data: list[int] = None) -> ExecResult:
         """
         请求退出传输
+
         :param data: 包含数据的列表
+        :type data: list[int]
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 请求退出传输失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -892,10 +1000,15 @@ class EcoPudsFunc(object):
         return exec_result
 
     def ecu_reset(self,
-                  reset_type: int):
+                  reset_type: int) -> ExecResult:
         """
         ecu复位
+
         :param reset_type: 复位类型
+        :type reset_type: int
+        :return: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPudsException: 参数错误；ecu复位失败
         """
         request = pcanuds.uds_msg()
         response = pcanuds.uds_msg()
@@ -930,15 +1043,20 @@ class EcoPudsFunc(object):
         return exec_result
 
     def erase_write_data(self,
-                         obj_srecord: Srecord):
+                         obj_srecord: Srecord) -> float:
         """
         将Srecord文件的S3数据，擦除并写入Flash
         擦写流程：
         对于每个连续擦写段执行routine_control(擦除内存)后，再执行request_download(请求下载),
         将擦写段分成单个或多个block执行transfer_data(数据传输),当前擦写段的所有block传输完毕执行request_transfer_exit(退出传输),
         然后开始下一段擦写,直到将所有的擦写段擦写完毕
+
         :param obj_srecord: Srecord对象，对象中包含erase_memory_infos属性，此属性含有各连续擦写数据段的详细信息
-        :return: 返回执行时间，float，单位s
+        :type obj_srecord: Srecord
+        :return: 返回执行时间，单位s
+        :rtype: float
+        :raises EcoPudsException: Srecord对象为空；执行擦除内存未得到有效反馈；执行请求下载未得到有效反馈；执行数据传输未得到有效反馈；
+            执行退出传输未得到有效反馈
         """
 
         def hex2byte(hex_value: str):
@@ -1080,6 +1198,26 @@ class EcoPudsFunc(object):
 ##############################
 
 class DownloadThread(threading.Thread):
+    """
+    刷写线程类
+
+    :param request_can_id: 请求设备的CAN_ID(0x开头的16进制)
+    :type request_can_id: str
+    :param response_can_id: 响应设备的CAN_ID(0x开头的16进制)
+    :type response_can_id: str
+    :param function_can_id: 功能地址(0x开头的16进制)
+    :type function_can_id: str
+    :param device_channel: Pcan设备通道(0x开头的16进制)
+    :type device_channel: str
+    :param device_baudrate: Pcan设备波特率
+    :type device_baudrate: str
+    :param download_filepath: 程序记录文件路径
+    :type download_filepath: str
+    :param seed2key_filepath: 密钥文件路径
+    :type seed2key_filepath: str
+    :param obj_srecord: 程序记录文件对象
+    :type obj_srecord: Srecord
+    """
     def __init__(self,
                  request_can_id: str,
                  response_can_id: str,
@@ -1088,7 +1226,10 @@ class DownloadThread(threading.Thread):
                  device_baudrate: str,
                  download_filepath: str,
                  seed2key_filepath: str,
-                 obj_srecord: Srecord):
+                 obj_srecord: Srecord) -> None:
+        """
+        构造函数
+        """
         super().__init__()
         self.__request_can_id = request_can_id
         self.__response_can_id = response_can_id
@@ -1104,7 +1245,10 @@ class DownloadThread(threading.Thread):
         self.__has_ecu_reset = False
         self.__ew_time = 0.0
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """
+        析构函数
+        """
         try:
             obj_flash = self.obj_flash
             if self.__has_open_device:
@@ -1131,19 +1275,24 @@ class DownloadThread(threading.Thread):
             pass
 
     @staticmethod
-    def print_detail(txt: str, *args, **kwargs):
+    def print_detail(txt: str, *args, **kwargs) -> None:
         """
-        向text_info控件写入信息
+        打印消息，可以定向到指定向函数，以自定义打印功能，例如向text_info控件写入信息
+
         :param txt: 待写入的信息
-        :param args: 位置参数列表，第一个参数为文字颜色
+        :type txt: str
+        :param args: 位置参数，第一个参数为文字颜色
                     None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
+        :param kwargs: 关键字参数
         """
         print(txt)
 
-    def __deal_comm_para(self):
+    def __deal_comm_para(self) -> tuple[pcanuds.c_uint32, pcanuds.c_uint32, int, int, int]:
         """
         处理通信参数
+
         :return: channel, baudrate, tester_can_id, ecu_can_id, broadcast_can_id
+        :rtype:  tuple[pcanuds.c_uint32, pcanuds.c_uint32, int, int, int]
         """
 
         tester_can_id = int(self.__request_can_id, 16)
@@ -1173,10 +1322,12 @@ class DownloadThread(threading.Thread):
 
         return channel, baudrate, tester_can_id, ecu_can_id, broadcast_can_id
 
-    def __create_flash_obj(self):
+    def __create_flash_obj(self) -> EcoPudsFunc:
         """
         创建flash对象
+
         :return: flash对象
+        :rtype: EcoPudsFunc
         """
         try:
             # 参数配置
@@ -1193,9 +1344,10 @@ class DownloadThread(threading.Thread):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def run(self):
+    def run(self) -> None:
         """
         程序刷写流程
+
         """
         try:
             msg = f"当前设备 -> 请求地址:{self.__request_can_id}, 响应地址:{self.__response_can_id}, 功能地址:{self.__function_can_id}, " + \
@@ -1239,6 +1391,7 @@ class DownloadThread(threading.Thread):
             obj_flash.set_mapping('tester')
             # 切换到默认会话
             self.print_detail('------诊断会话控制:切换到默认会话------')
+            self.print_detail('请重新上电！','warning')
             obj_flash.diagnostic_session_control(obj_flash.obj_puds.PUDS_SVC_PARAM_DSC_DS)
             obj_flash.remove_mapping_by_can_id(tester_can_id)
 

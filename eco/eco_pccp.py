@@ -17,7 +17,7 @@ import sys
 import threading  # 用于多线程
 import time
 import traceback  # 用于获取异常详细信息
-from typing import List, Any, Union, Dict
+from typing import Any, Union
 
 from crccheck.crc import Crc16Modbus, Crc16Ibm3740
 
@@ -39,18 +39,18 @@ IS_PRINT_MSG_DETAIL = False  # 是否打印消息细节,二级
 IS_PRINT_MAP_DETAIL = False  # 是否打印地址映射细节,三级
 
 
-def wait_getch_and_clear():
+def wait_getch_and_clear() -> None:
     """
     等待用户输入并清屏
     """
 
-    def get_input():
+    def get_input() -> None:
         """
         等待输入
         """
         sys.stdin.read(1)
 
-    def clear_console():
+    def clear_console() -> None:
         """
         清屏
         """
@@ -65,28 +65,40 @@ def wait_getch_and_clear():
         clear_console()
 
 
-def print_exec_detail(txt: str, *args, **kwargs):
+def print_exec_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印任务执行细节,可以根据鸭子类型，进行重定向
+    打印任务执行细节，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_EXEC_DETAIL:
         print(txt)
 
 
-def print_msg_detail(txt: str, *args, **kwargs):
+def print_msg_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印消息数据信息,可以根据鸭子类型，进行重定向
+    打印消息数据信息，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_MSG_DETAIL:
         print(txt)
 
 
-def print_map_detail(txt: str, *args, **kwargs):
+def print_map_detail(txt: str, *args, **kwargs) -> None:
     """
-    打印地址映射信息,可以根据鸭子类型，进行重定向
+    打印地址映射信息，可将此函数定向到指定的函数，以自定义打印功能
+
     :param txt: 待打印内容
+    :type txt: str
+    :param args: 位置参数
+    :param kwargs: 关键字参数
     """
     if IS_PRINT_MAP_DETAIL:
         print(txt)
@@ -98,12 +110,15 @@ def print_map_detail(txt: str, *args, **kwargs):
 
 class EcoPccpException(Exception):
     """
-    自定义EcoPccp异常
+    EcoPccp异常类
+
+    :param message: 要显示的异常消息
+    :type message: str
     """
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         """
-        :param message: 要显示的异常消息
+        构造函数
         """
         self.message = message
 
@@ -114,12 +129,16 @@ class EcoPccpException(Exception):
 class ExecResult(object):
     """
     每一个操作的执行结果类型
+
+    :param is_success: 操作是否成功
+    :type is_success: bool
+    :param data: 操作返回的数据
+    :type data: Any
     """
 
     def __init__(self, is_success: bool = None, data: Any = None):
         """
-        :param is_success: 操作是否成功
-        :param data: 操作返回的数据
+        构造函数
         """
         self.is_success = is_success
         self.data = data
@@ -132,6 +151,21 @@ class ExecResult(object):
 class EcoPccpFunc(object):
     """
     EcoPccpFunc类，用于实现Pcan设备通过CCP协议操作优控VCU的各项服务
+
+    :param channel: Pcan设备通道
+    :type channel: pcanccp.TPCANHandle
+    :param baudrate: Pcan设备波特率
+    :type baudrate: pcanccp.TPCANBaudrate
+    :param ecu_addr: ecu站地址，Intel格式
+    :type ecu_addr: int
+    :param cro_can_id: 请求设备的CAN_ID
+    :type cro_can_id: int
+    :param dto_can_id: 响应设备的CAN_ID
+    :type dto_can_id: int
+    :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
+    :type is_intel_format: bool
+    :param timeout: 等ECU响应请求的超时时间，单位：毫秒
+    :type timeout: int
     """
 
     def __init__(
@@ -142,15 +176,9 @@ class EcoPccpFunc(object):
             cro_can_id: int,
             dto_can_id: int,
             is_intel_format: bool,
-            timeout: int):
+            timeout: int) -> None:
         """
-        :param channel: Pcan设备通道
-        :param baudrate: Pcan设备波特率
-        :param ecu_addr: ecu站地址，Intel格式
-        :param cro_can_id: 请求设备的CAN_ID
-        :param dto_can_id: 响应设备的CAN_ID
-        :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
-        :param timeout: 等ECU响应请求的超时时间，单位：毫秒
+        构造函数
         """
 
         # self.transmission_error_number = 0
@@ -161,30 +189,38 @@ class EcoPccpFunc(object):
         self.cro_can_id = pcanccp.c_uint32(cro_can_id)
         self.dto_can_id = pcanccp.c_uint32(dto_can_id)
         self.is_intel_format = pcanccp.c_bool(is_intel_format)
-        self.timeout = pcanccp.c_uint16(timeout)
+        self.timeout: pcanccp.c_uint16 = pcanccp.c_uint16(timeout)
 
         self.obj_pcan = pcanccp.PCANBasic()
         self.obj_pccp = pcanccp.PcanCCP()
         self.ccp_handle = pcanccp.TCCPHandle()
 
     def custom_cro(self,
-                   data: Union[List[int], bytes, bytearray],
+                   data: Union[list[int], bytes, bytearray],
                    timeout: int,
-                   is_must_response: bool):
+                   is_must_response: bool) -> ExecResult:
         """
         自定义服务命令
+
         :param data: 待发送的命令帧
+        :type data: Union[list[int], bytes, bytearray]
         :param timeout: 等待响应超时时间，单位：毫秒
+        :type timeout: int
         :param is_must_response: 是否必须响应。True：若无响应则会抛出异常，False：若无响应不会抛出异常，返回全零报文数据
-        :returns:  exec_result
+        :type is_must_response: bool
+        :returns: 操作结果
+        :rtype: ExecResult
+        :raises EcoPccpException: 发送失败；接收超时
         """
 
-        def __write(data: Union[List[int], bytes, bytearray]):
+        def __write(data: Union[list[int], bytes, bytearray]) -> int:
             """
             发送自定义服务消息
 
             :param data: 待发送消息数据，8个字节
-            :returns: 返回发送状态
+            :type data: Union[list[int], bytes, bytearray]
+            :returns: 发送状态码
+            :rtype: int
             """
             if len(data) != 8:
                 msg = f'发送数据不是8字节'
@@ -200,12 +236,17 @@ class EcoPccpFunc(object):
             return status
 
         def __read(timeout: int,
-                   is_must_response: bool):
+                   is_must_response: bool) -> tuple[int, bytes]:
             """
             接收自定义服务消息
 
             :param timeout: 超出时间则抛出异常，毫秒
+            :type timeout: int
+            :param is_must_response: 是否必须响应
+            :type is_must_response: bool
             :returns: 若在指定时间内接收到消息，则返回接收状态和消息数据
+            :rtype: tuple[int, bytes]
+            :raises EcoPccpException: 接收消息超时
             """
             status = pcanccp.PCAN_ERROR_QRCVEMPTY
             time_start = time.time()
@@ -237,11 +278,13 @@ class EcoPccpFunc(object):
             msg = f'发送自定义服务消息失败: {bytes.decode(text)}'
             raise EcoPccpException(msg)
 
-    def initialize_device(self):
+    def initialize_device(self) -> ExecResult:
         """
         初始化设备
 
-        :returns: 执行成功，返回执行结果ExecResult
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 初始化设备失败
         """
         # 初始化
         status = self.obj_pccp.Initialize(self.channel, self.baudrate, 0, 0, 0)
@@ -257,11 +300,12 @@ class EcoPccpFunc(object):
 
         return exec_result
 
-    def uninitialize_device(self):
+    def uninitialize_device(self) -> ExecResult:
         """
         关闭设备
 
-        :returns: 执行成功，返回执行结果ExecResult
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
         """
         status = self.obj_pccp.Uninitialize(self.channel)
         _, text = self.obj_pccp.GetErrorText(status)
@@ -276,11 +320,12 @@ class EcoPccpFunc(object):
 
         return exec_result
 
-    def read_msg(self):
+    def read_msg(self) -> ExecResult:
         """
         读取消息
 
-        :returns: 执行成功，返回执行结果ExecResult,ExecResult.data含消息中的数据
+        :returns: 执行结果ExecResult,ExecResult.data含消息中的数据
+        :rtype: ExecResult
         """
         exec_result = None
         recv_msg = pcanccp.TCCPMsg()
@@ -292,17 +337,19 @@ class EcoPccpFunc(object):
             exec_result = ExecResult(is_success=True, data=data)
         return exec_result
 
-    def reset(self):
+    def reset(self) -> None:
         """
         清空消息缓存
         """
         self.obj_pccp.Reset(ccp_handle=self.ccp_handle)
 
-    def connect(self):
+    def connect(self) -> ExecResult:
         """
         建立连接
 
-        :returns: 执行成功，返回执行结果ExecResult
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 建立连接失败
         """
         ccp_handle = pcanccp.TCCPHandle()
 
@@ -332,13 +379,17 @@ class EcoPccpFunc(object):
         return exec_result
 
     def disconnect(self,
-                   is_temporary: bool):
+                   is_temporary: bool) -> ExecResult:
         """
-        断开分为两种模式，一种离线模式，一种扯断断开与ECU的通信，彻底断开通信时，ECU将会被自动初始化
+        断开连接；
+        断开分为两种模式，一种离线模式，一种扯断断开与ECU的通信，彻底断开通信时，ECU将会被自动初始化；
         暂时断开即离线模式不会终止与当前ECU的DAQ通信，也不会影响先前的各项设置。在该命令中的ECU地址采用Intel格式，低位在前。
 
         :param is_temporary: 是否为暂时离线模式
-        :returns: 执行成功，返回执行结果ExecResult
+        :type is_temporary: bool
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 断开连接失败
         """
         status = self.obj_pccp.Disconnect(ccp_handle=self.ccp_handle,
                                           temporary=pcanccp.c_bool(is_temporary),
@@ -359,12 +410,18 @@ class EcoPccpFunc(object):
 
     def get_ccp_version(self,
                         expected_main_version: int,
-                        expected_release_version: int):
+                        expected_release_version: int) -> ExecResult:
         """
-        获取CCP协议版本号。
+        获取CCP协议版本号；
         该命令用于统一主、从设备所使用的CCP协议版本，该命令应在EXCHANGE_ID命令之前执行。
 
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有版本号信息
+        :param expected_main_version: 期望的主版本号
+        :type expected_main_version: int
+        :param expected_release_version: 期望的次版本号
+        :type expected_release_version: int
+        :returns: 执行结果ExecResult，ExecResult.data含有版本号信息
+        :rtype: ExecResult
+        :raises EcoPccpException: 获取协议版本失败
         """
         main_version = pcanccp.c_ubyte(expected_main_version)
         release_version = pcanccp.c_ubyte(expected_release_version)
@@ -388,12 +445,14 @@ class EcoPccpFunc(object):
 
         return exec_result
 
-    def exchange_id(self):
+    def exchange_id(self) -> ExecResult:
         """
         交换站标识符,MCD（主设备）与ECU的通信需要ASAP2文件的支持，
         通过这个命令，自动化系统可以由DTO返回的ID标识符自动为ECU分配一ASAP文件
 
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有ecu_data数据
+        :returns: 执行结果ExecResult，ExecResult.data含有ecu_data数据
+        :rtype: ExecResult
+        :raises EcoPccpException: 交换站标识符失败
         """
         ecu_data = pcanccp.TCCPExchangeData()
         master_data_length = 0
@@ -424,12 +483,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def get_seed(self,
-                 ask_resource: pcanccp.TCCPResourceMask):
+                 ask_resource: pcanccp.TCCPResourceMask) -> ExecResult:
         """
         申请密钥
 
         :param ask_resource: 要申请的资源
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有seed数据
+        :type ask_resource: pcanccp.TCCPResourceMask
+        :returns: 执行结果ExecResult，ExecResult.data含有seed数据
+        :rtype: ExecResult
+        :raises EcoPccpException: 申请密钥失败
         """
 
         seed_buffer = pcanccp.c_void_p()
@@ -457,12 +519,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def unlock(self,
-               key: Union[List[int], bytes, bytearray]):
+               key: Union[list[int], bytes, bytearray]) -> ExecResult:
         """
         解除保护
 
         :param key: 密钥数据
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有privileges数据(请求资源的授权状态)
+        :type key: list[int] or bytes or bytearray
+        :returns: 执行结果ExecResult，ExecResult.data含有privileges数据(请求资源的授权状态)
+        :rtype: ExecResult
+        :raises EcoPccpException: 解除保护失败
         """
         if key:
             key_length = len(key)
@@ -495,7 +560,7 @@ class EcoPccpFunc(object):
         return exec_result
 
     def set_session_status(self,
-                           expected_status: pcanccp.TCCPSessionStatus):
+                           expected_status: pcanccp.TCCPSessionStatus) -> ExecResult:
         """
         设置主从设备间的通信状态
 
@@ -505,7 +570,10 @@ class EcoPccpFunc(object):
             0x04: Request resuming.
             0x40: Request storing.
             0x80: Running status.
+        :type expected_status: pcanccp.TCCPSessionStatus
         :returns: 执行成功，返回执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 设置通信状态失败
         """
 
         status = self.obj_pccp.SetSessionStatus(ccp_handle=self.ccp_handle,
@@ -525,16 +593,18 @@ class EcoPccpFunc(object):
 
         return exec_result
 
-    def get_session_status(self):
+    def get_session_status(self) -> ExecResult:
         """
         获取主从设备间的通信状态
 
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data中含有通信状态信息，
+        :returns: 执行结果ExecResult，ExecResult.data中含有通信状态信息，
             0x01: Calibration Status.
             0x02: Data acquisition Status.
             0x04: Request resuming.
             0x40: Request storing.
             0x80: Running status.
+        :rtype: ExecResult
+        :raises EcoPccpException: 获取通信状态失败
         """
 
         session_status = pcanccp.TCCPSessionStatus()
@@ -558,15 +628,20 @@ class EcoPccpFunc(object):
     def set_mta(self,
                 mta: int,
                 addr_offset: int,
-                addr_base: int):
+                addr_base: int) -> ExecResult:
         """
         设置内存操作的初始地址（32位基地址+地址偏移），后续对内存的读取操作都由该起始地址开始
 
         :param mta: mta序号(0或1)，DNLOAD、UPLOAD、DNLOAD_6、SELECT_CAL_PAGE、
             CLEAR_MEMORY、PROGRAM及PROGRAM_6命令使用MTA0，MOVE命令使用MTA1
+        :type mta: int
         :param addr_offset: 地址偏移
+        :type addr_offset: int
         :param addr_base: 基地址
-        :returns: 执行成功，返回执行结果ExecResult
+        :type addr_base: int
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 设置内存操作地址失败
         """
 
         status = self.obj_pccp.SetMemoryTransferAddress(ccp_handle=self.ccp_handle,
@@ -589,12 +664,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def upload(self,
-               size: int):
+               size: int) -> ExecResult:
         """
         根据当前mta0地址，查询数据
 
         :param size: 要查询的数据的长度，单位：字节
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有data数据(bytes)
+        :type size: int
+        :returns: 执行结果ExecResult，ExecResult.data含有data数据(bytes)
+        :rtype: ExecResult
+        :raises EcoPccpException: 查询数据失败
         """
 
         data_buffer = pcanccp.c_buffer(size)
@@ -617,11 +695,14 @@ class EcoPccpFunc(object):
 
         return exec_result
 
-    def select_cal_page(self):
+    def select_cal_page(self) -> ExecResult:
         """
+        选择标定数据页；
         此命令取决于ecu内部实现。执行此命令后，先前设置的mta0地址将会自动指向该命令激活的标定页。
 
-        :returns: 执行成功，返回执行结果ExecResult
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 选择标定数据页失败
         """
 
         data_buffer = pcanccp.c_void_p()
@@ -646,7 +727,9 @@ class EcoPccpFunc(object):
         """
         获取处于激活状态下的标定数据页的首地址
 
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含首地址信息
+        :returns: 执行结果ExecResult，ExecResult.data含首地址信息
+        :rtype: ExecResult
+        :raises EcoPccpException: 获取激活标定数据页失败
         """
 
         mta0_ext = pcanccp.c_ubyte()
@@ -681,9 +764,13 @@ class EcoPccpFunc(object):
         如果GET_DAQ_SIZE命令中选定的DAQ列表不存在或者不可用，，从设备返回的ODT列表个数为0。
 
         :param list_number: daq列表号
+        :type list_number: int
         :param dto_id: dto的can_id
-        :returns: 执行成功，返回执行结果ExecResult，
+        :type dto_id: str
+        :returns: 执行结果ExecResult，
             ExecResult.data含(daq列表序号: int, daq列表的第一个pid号: str, daq列表大小: str,)
+        :rtype: ExecResult
+        :raises EcoPccpException: 获取daq列表大小失败
         """
 
         dto_id = int.to_bytes(int(dto_id, 16), 4, 'big', signed=False)
@@ -714,15 +801,20 @@ class EcoPccpFunc(object):
     def set_daq_list_ptr(self,
                          list_number: int,
                          odt_number: int,
-                         element_number: int):
+                         element_number: int) -> ExecResult:
         """
         设置daq列表指针，在进行DAQ通讯前，必须将DAQ列表进行配置，将数据写入到相应的DAQ列表里的ODT元素中。
         SET_DAQ_PTR用来为写入DAQ列表数据设置入口地址指针。
 
         :param list_number: daq列表号
+        :type list_number: int
         :param odt_number: odt列表号
+        :type odt_number: int
         :param element_number: 当前odt列表中的元素号
-        :returns: 执行成功，返回执行结果ExecResult
+        :type element_number: int
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 设置daq列表指针失败
         """
 
         size = pcanccp.c_ubyte()
@@ -750,16 +842,21 @@ class EcoPccpFunc(object):
     def write_daq_list_entry(self,
                              size_element: int,
                              addr_ext: int,
-                             addr: str):
+                             addr: str) -> ExecResult:
         """
         写入daq列表，在DAQ通信前，需要对DAQ列表进行配置，将需要上传的数据先写到DAQ列表所在的ODT列表中，
         先前由SET_DAQ_PTR命令所定义的地址即为该命令的数据写入地址，在此命令中，一次写入的数据被成为一个DAQ元素，
         其字节可分为1字节、2字节、4字节。
 
         :param size_element: 元素长度，单位：字节
+        :type size_element: int
         :param addr_ext: 地址偏移量
+        :type addr_ext: int
         :param addr: 地址
-        :returns: 执行成功，返回执行结果ExecResult
+        :type addr: str
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 写入daq列表失败
         """
 
         addr_rev = int.to_bytes(int(addr, 16), 4, 'big', signed=False)
@@ -788,16 +885,23 @@ class EcoPccpFunc(object):
                                      list_number: int,
                                      last_odt_number: int,
                                      event_channel: int,
-                                     prescaler: str):
+                                     prescaler: str) -> ExecResult:
         """
         启动/停止DAQ数据传输，用于DAQ通信模式，其作用是开始或终止某个DAQ列表的数据上传。
 
         :param mode: 0: Stop, 1: Start, 2: prepare for synchronized data transmission
+        :type mode: int
         :param list_number: DAQ list number to process.
+        :type list_number: int
         :param last_odt_number: ODTs to be transmitted (from 0 to LastODTNumber).
+        :type last_odt_number: int
         :param event_channel: Generic signal source for timing determination.
+        :type event_channel: int
         :param prescaler: Transmission rate prescaler.
-        :returns: 执行成功，返回执行结果ExecResult
+        :type prescaler: str
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: mode参数错误；启动/停止DAQ数据传输错误
         """
         if mode == 0:
             type_transmission = '停止'
@@ -837,13 +941,16 @@ class EcoPccpFunc(object):
         return exec_result
 
     def start_stop_sync_data_transmission(self,
-                                          is_start: bool):
+                                          is_start: bool) -> ExecResult:
         """
         启动/停止同步数据传输。
         在start_stop_data_transmission命令中，如果模式值为0x02，则对DAQ列表进行标识，为同步数据传输做准备。
 
         :param is_start: true: Starts the configured DAQ lists. false: Stops all DAQ lists.
-        :returns: 执行成功，返回执行结果ExecResult
+        :type is_start: bool
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 启动/停止同步数据传输错误
         """
 
         status = self.obj_pccp.StartStopSynchronizedDataTransmission(ccp_handle=self.ccp_handle,
@@ -864,12 +971,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def clear_memory(self,
-                     memory_size: int):
+                     memory_size: int) -> ExecResult:
         """
         擦除非易失性内存
 
         :param memory_size: 要擦除的内存长度，单位:字节
-        :returns: 执行成功，返回执行结果ExecResult
+        :type memory_size: int
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 擦除内存错误
         """
 
         status = self.obj_pccp.ClearMemory(ccp_handle=self.ccp_handle,
@@ -890,12 +1000,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def program(self,
-                data: Union[List[int], bytes, bytearray]):
+                data: Union[list[int], bytes, bytearray]) -> ExecResult:
         """
         编程
 
         :param data: 要编程的数据
-        :returns: 执行成功，返回执行结果ExecResult
+        :type data: list[int] or bytes or bytearray
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 编程错误
         """
         data_length = len(data)
         data_buffer = ctypes.create_string_buffer(data_length)
@@ -929,12 +1042,15 @@ class EcoPccpFunc(object):
         return exec_result
 
     def build_checksum(self,
-                       block_size: int):
+                       block_size: int) -> ExecResult:
         """
         内存校验
 
         :param block_size: 要校验的内存区域长度，单位:字节
-        :returns: 执行成功，返回执行结果ExecResult，ExecResult.data含有checksum_buffer数据
+        :type block_size: int
+        :returns: 执行结果ExecResult，ExecResult.data含有checksum_buffer数据
+        :rtype: ExecResult
+        :raises EcoPccpException: 内存校验错误
         """
         checksum_buffer = ctypes.c_void_p()
         checksum_size = pcanccp.c_ubyte()
@@ -959,7 +1075,7 @@ class EcoPccpFunc(object):
         return exec_result
 
     def erase_write_data(self,
-                         obj_srecord: Srecord):
+                         obj_srecord: Srecord) -> float:
         """
         将Srecord文件的S3数据，擦除并写入Flash。
         擦写流程：
@@ -967,7 +1083,10 @@ class EcoPccpFunc(object):
         编程结束后checksum各数据段，最后通过自定义服务消息(0x1D)定位程序起始地址启动程序
 
         :param obj_srecord: Srecord对象，对象中包含erase_memory_infos属性，此属性含有各连续擦写数据段的详细信息
-        :return: 返回执行时间，float，单位s
+        :type obj_srecord: Srecord
+        :return: 返回执行时间，单位s
+        :rtype: float
+        :raises EcoPccpException: 擦写错误
         """
 
         # 开始时间戳
@@ -1076,6 +1195,27 @@ class EcoPccpFunc(object):
 class DownloadThread(threading.Thread):
     """
     刷写线程类
+
+    :param request_can_id: 请求设备的CAN_ID(0x开头的16进制)
+    :type request_can_id: str
+    :param response_can_id: 响应设备的CAN_ID(0x开头的16进制)
+    :type response_can_id: str
+    :param ecu_addr: ecu站地址，Intel格式(0x开头的16进制)
+    :type ecu_addr: str
+    :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
+    :type is_intel_format: bool
+    :param timeout: 等ECU响应请求的超时时间，单位：毫秒
+    :type timeout: int
+    :param device_channel: Pcan设备通道(0x开头的16进制)
+    :type device_channel: str
+    :param device_baudrate: Pcan设备波特率
+    :type device_baudrate: str
+    :param download_filepath: 程序记录文件路径
+    :type download_filepath: str
+    :param seed2key_filepath: 密钥文件路径
+    :type seed2key_filepath: str
+    :param obj_srecord: 程序记录文件对象
+    :type obj_srecord: Srecord
     """
 
     def __init__(self,
@@ -1088,18 +1228,9 @@ class DownloadThread(threading.Thread):
                  device_baudrate: str,
                  download_filepath: str,
                  seed2key_filepath: str,
-                 obj_srecord: Srecord):
+                 obj_srecord: Srecord) -> None:
         """
-        :param request_can_id: 请求设备的CAN_ID
-        :param response_can_id: 响应设备的CAN_ID
-        :param ecu_addr: ecu站地址，Intel格式
-        :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
-        :param timeout: 等ECU响应请求的超时时间，单位：毫秒
-        :param device_channel: Pcan设备通道
-        :param device_baudrate: Pcan设备波特率
-        :param download_filepath: 程序记录文件路径
-        :param seed2key_filepath: 密钥文件路径
-        :param obj_srecord: 程序记录文件对象
+        构造函数
         """
         super().__init__()
         self.__request_can_id = request_can_id
@@ -1118,7 +1249,10 @@ class DownloadThread(threading.Thread):
         self.__has_ecu_reset = False
         self.__ew_time = 0.0
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """
+        析构函数
+        """
         try:
             if self.__has_ecu_reset:
                 self.print_detail(f"\n\t<-下载完成->，用时{self.__ew_time:.2f}s", 'done')
@@ -1129,19 +1263,24 @@ class DownloadThread(threading.Thread):
             pass
 
     @staticmethod
-    def print_detail(txt: str, *args, **kwargs):
+    def print_detail(txt: str, *args, **kwargs) -> None:
         """
-        向text_info控件写入信息
+        打印消息，可以定向到指定向函数，以自定义打印功能，例如向text_info控件写入信息
+
         :param txt: 待写入的信息
-        :param args: 位置参数列表，第一个参数为文字颜色
+        :type txt: str
+        :param args: 位置参数，第一个参数为文字颜色
                     None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
+        :param kwargs: 关键字参数
         """
         print(txt)
 
-    def __deal_comm_para(self):
+    def __deal_comm_para(self) -> tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]:
         """
         处理通信参数
+
         :return: channel, baudrate, cro_can_id, dto_can_id, ecu_addr
+        :rtype:  tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]
         """
 
         cro_can_id = int(self.__request_can_id, 16)
@@ -1171,10 +1310,12 @@ class DownloadThread(threading.Thread):
 
         return channel, baudrate, cro_can_id, dto_can_id, ecu_addr
 
-    def __create_pccp_obj(self):
+    def __create_pccp_obj(self) -> EcoPccpFunc:
         """
         创建flash对象
+
         :return: flash对象
+        :rtype: EcoPccpFunc
         """
         try:
             # 参数配置
@@ -1193,9 +1334,10 @@ class DownloadThread(threading.Thread):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def run(self):
+    def run(self) -> None:
         """
         程序刷写流程
+
         """
         try:
             msg = f"当前设备 -> 请求地址:{self.__request_can_id}, 响应地址:{self.__response_can_id}, ecu地址:{self.__ecu_addr}, " + \
@@ -1285,6 +1427,27 @@ class DownloadThread(threading.Thread):
 class Measure(object):
     """
     测量连接类
+
+    :param request_can_id: 请求设备的CAN_ID(0x开头的16进制)
+    :type request_can_id: str
+    :param response_can_id: 响应设备的CAN_ID(0x开头的16进制)
+    :type response_can_id: str
+    :param ecu_addr: ecu站地址，Intel格式(0x开头的16进制)
+    :type ecu_addr: str
+    :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
+    :type is_intel_format: bool
+    :param timeout: 等ECU响应请求的超时时间，单位：毫秒
+    :type timeout: int
+    :param device_channel: Pcan设备通道
+    :type device_channel: str
+    :param device_baudrate: Pcan设备波特率
+    :type device_baudrate: str
+    :param pgm_filepath: 密钥文件路径
+    :type pgm_filepath: str
+    :param a2l_filepath: a2l文件路径
+    :type a2l_filepath: str
+    :param obj_srecord: 程序记录文件对象
+    :type obj_srecord: Srecord
     """
 
     def __init__(self,
@@ -1299,16 +1462,7 @@ class Measure(object):
                  a2l_filepath: str,
                  obj_srecord: Srecord):
         """
-        :param request_can_id: 请求设备的CAN_ID
-        :param response_can_id: 响应设备的CAN_ID
-        :param ecu_addr: ecu站地址，Intel格式
-        :param is_intel_format: 传输数据格式，True：Intel，False：Motorola
-        :param timeout: 等ECU响应请求的超时时间，单位：毫秒
-        :param device_channel: Pcan设备通道
-        :param device_baudrate: Pcan设备波特率
-        :param pgm_filepath: 密钥文件路径
-        :param a2l_filepath: a2l文件路径
-        :param obj_srecord: 程序记录文件对象
+        构造函数
         """
         self.__request_can_id = request_can_id
         self.__response_can_id = response_can_id
@@ -1338,25 +1492,34 @@ class Measure(object):
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
     @staticmethod
-    def print_detail(txt: str, *args, **kwargs):
+    def print_detail(txt: str, *args, **kwargs) -> None:
         """
-        向text_info控件写入信息
+        打印消息，可以定向到指定向函数，以自定义打印功能，例如向text_info控件写入信息
+
         :param txt: 待写入的信息
-        :param args: 位置参数列表，第一个参数为文字颜色
+        :type txt: str
+        :param args: 位置参数，第一个参数为文字颜色
                     None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
+        :param kwargs: 关键字参数
         """
         print(txt)
 
-    def connect(self, epk_addr: str):
+    def connect(self, epk_addr: str) -> str | None:
         """
         连接流程
-        :param epk_addr: epk地址
+
+        :param epk_addr: 参数epk信息的首地址(0x开头的16进制)
+        :type epk_addr: str
+        :returns: 若执行成功，返回epk字符串；否则返回None
+        :rtype: str or None
         """
 
-        def _get_epk_from_ecu():
+        def _get_epk_from_ecu() -> str:
             """
             从ecu获取epk
-            :returns: epk字符串,
+
+            :returns: epk字符串
+            :rtype: str
             """
             epk = []
             self.print_detail('------从ecu获取epk------')
@@ -1373,12 +1536,16 @@ class Measure(object):
                     break
             return b''.join(epk).decode('utf-8').rstrip('\x00')
 
-        def _check_ecu_ram_cal(check_addr: int, check_length: int):
+        def _check_ecu_ram_cal(check_addr: int, check_length: int) -> tuple[str, str]:
             """
             校验ecu ram中的标定区，分成两块校验
+
             :param check_addr: 校验区域首地址
+            :type check_addr: int
             :param check_length: 每块区域校验长度
+            :type check_length: int
             :returns: 校验结果，(区域1校验值，区域2校验值)
+            :rtype: tuple[str, str]
             """
             # 校验区域1
             addr = int.to_bytes(check_addr, 4, 'big', signed=False)
@@ -1402,13 +1569,18 @@ class Measure(object):
             self.print_detail(f"ecu_cal_2校验值为{hex(exec_result_2.data)}")
             return hex(exec_result_1.data), hex(exec_result_2.data)
 
-        def _check_pgm_cal(pgm: Srecord, check_addr: int, check_length: int):
+        def _check_pgm_cal(pgm: Srecord, check_addr: int, check_length: int) -> tuple[str, str]:
             """
             校验pgm中的标定区，分成两块校验
+
             :param pgm: Srecord程序对象
+            :type pgm: Srecord
             :param check_addr: 校验区域首地址
+            :type check_addr: int
             :param check_length: 每块区域校验长度
+            :type check_length: int
             :returns: 校验结果，(区域1校验值，区域2校验值)
+            :rtype: tuple[str, str]
             """
             erase_memory_info = None
             for erase_memory_info in pgm.erase_memory_infos:
@@ -1558,9 +1730,10 @@ class Measure(object):
             # if self.has_open_device and self.obj_pccp.uninitialize_device().is_success:
             #     self.has_open_device = False
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """
         断开连接流程
+
         """
         try:
             # 若未打开设备或未连接，则返回
@@ -1588,11 +1761,14 @@ class Measure(object):
             if self.has_open_device and self.obj_pccp.uninitialize_device().is_success:
                 self.has_open_device = False
 
-    def get_daq_cfg(self, daq_number: int):
+    def get_daq_cfg(self, daq_number: int) -> list[int, str, str] | None:
         """
         获取daq列表配置
+
         :param daq_number: daq列表序号
+        :type daq_number: int
         :return: daq_cfg，daq列表配置 (daq列表序号: int, daq列表的第一个pid号: str, daq列表大小: str)
+        :rtype: list[int, str, str] or None
         """
         try:
             # 若未连接，则返回
@@ -1614,9 +1790,12 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def start_measure(self, daqs: Dict[int, Dict[int, List[MonitorItem]]]):
+    def start_measure(self, daqs: dict[int, dict[int, list[MonitorItem]]]) -> None:
         """
         启动测量流程
+
+        :param daqs: daq列表
+        :type daqs: dict[int, dict[int, list[MonitorItem]]]
         """
         try:
             # 若未连接，则返回
@@ -1678,9 +1857,10 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def stop_measure(self):
+    def stop_measure(self) -> None:
         """
         停止测量流程
+
         """
         try:
             # 若未连接或已停止测量，则返回
@@ -1696,9 +1876,12 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def read_dto_msg(self):
+    def read_dto_msg(self) -> list[int] | None:
         """
         读取pid数据
+
+        :return: 若执行成功，返回pid数据；否则返回None
+        :rtype: list[int] or None
         """
         # 若已启动测量，则读取消息
         if self.has_measured:
@@ -1706,18 +1889,21 @@ class Measure(object):
             if exec_result and exec_result.is_success:
                 return exec_result.data
 
-    def clear_recv_queue(self):
+    def clear_recv_queue(self) -> None:
         """
         清空消息接收缓冲区
+
         """
         # 若已连接，则清空
         if self.has_connected:
             self.obj_pccp.reset()
 
-    def __deal_comm_para(self):
+    def __deal_comm_para(self) -> tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]:
         """
         处理通信参数
+
         :return: channel, baudrate, cro_can_id, dto_can_id, ecu_addr
+        :rtype: tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]
         """
 
         cro_can_id = int(self.__request_can_id, 16)
@@ -1747,10 +1933,12 @@ class Measure(object):
 
         return channel, baudrate, cro_can_id, dto_can_id, ecu_addr
 
-    def __create_eco_pccp_obj(self):
+    def __create_eco_pccp_obj(self) -> EcoPccpFunc:
         """
         创建measure对象
+
         :return: measure对象
+        :rtype: EcoPccpFunc
         """
         try:
             # 参数配置

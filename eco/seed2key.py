@@ -11,19 +11,24 @@
 ##############################
 
 import ctypes
-from typing import List, Union
+from typing import Union
 
 
 ##############################
 # Function declarations
 ##############################
 
-def get_key_of_seed(seed2key_filepath: str, seed_data: Union[List[int], bytes, bytearray]):
+def get_key_of_seed(seed2key_filepath: str, seed_data: Union[list[int], bytes, bytearray]) -> list[int]:
     """
     根据种子和算法计算密钥
+
     :param seed2key_filepath: 算法所在dll的文件路径
+    :type seed2key_filepath: str
     :param seed_data: 存有种子的字节列表
+    :type seed_data: Union[List[int], bytes, bytearray]
     :return: 存有密钥的字节列表
+    :rtype: list[int]
+    :raises LookupError: dll中不存在秘钥算法函数
     """
     dll = ctypes.windll.LoadLibrary(seed2key_filepath)
     if hasattr(dll, 'ASAP1A_CCP_ComputeKeyFromSeed'):

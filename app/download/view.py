@@ -9,6 +9,7 @@
 # Module imports
 ##############################
 import base64  # Base64编码解码模块
+from typing import AnyStr, Any
 
 from tkui import icon
 from tkui.tktypes import *
@@ -28,31 +29,39 @@ class DownloadView(tk.Tk, GetDpiMixIn):
     WIDTH_OPERATION_FRAME = 660
     WIDTH_SETTING_FRAME = 140
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """构造函数"""
         # 操作系统使用程序自身的dpi适配
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
         super().__init__()
         # 显示根窗口
         self.set_root()
 
-    def set_presenter(self, presenter):
+    def set_presenter(self, presenter: Any) -> None:
         """
         设置presenter，presenter中含一系列方法，用于处理界面事件
+
+        :param presenter: presenter对象
+        :type presenter: Any
         """
         self.presenter = presenter
         # 窗口点击关闭触发的功能
         self.protocol('WM_DELETE_WINDOW', lambda: self.presenter.handler_on_closing())
 
     @staticmethod
-    def show_warning(msg: str):
+    def show_warning(msg: str) -> None:
         """
         显示警告弹窗
+
+        :param msg: 警告内容
+        :type msg: str
         """
         messagebox.showwarning(title='警告', message=msg)
 
     def set_root(self):
         """
         设置根窗口
+
         """
         # root = tk.Tk()
         self.title("Eco Downloader")
@@ -72,9 +81,12 @@ class DownloadView(tk.Tk, GetDpiMixIn):
         self.iconbitmap('tmp.ico')
         os.remove('tmp.ico')
 
-    def set_root_menu(self, model: DownloadModel):
+    def set_root_menu(self, model: DownloadModel) -> None:
         """
         设置根窗口菜单
+
+        :param model: 下载视图的数据模型
+        :type model: DownloadModel
         """
         # 窗口绑定菜单栏
         menu_bar = tk.Menu(self)
@@ -118,6 +130,9 @@ class DownloadView(tk.Tk, GetDpiMixIn):
     def set_operation_frame(self, model: DownloadModel):
         """
         设置操作frame界面
+
+        :param model: 下载视图的数据模型
+        :type model: DownloadModel
         """
 
         # 添加一个Frame
@@ -169,7 +184,10 @@ class DownloadView(tk.Tk, GetDpiMixIn):
 
     def set_setting_frame(self, model: DownloadModel):
         """
-        设置操作frame界面
+        设置参数设置frame界面
+
+        :param model: 下载视图的数据模型
+        :type model: DownloadModel
         """
         # 添加一个Frame
         frame = TkFrame(master=self,
@@ -278,6 +296,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
     def __show_about():
         """
         显示关于弹窗
+
         """
         msg = ('产品信息: \n'
                '    Eco Tool Suit\n'
@@ -291,5 +310,6 @@ class DownloadView(tk.Tk, GetDpiMixIn):
     def __show_help():
         """
         显示帮助说明弹窗
+
         """
         messagebox.showinfo(title='帮助', message='1、选择密钥文件\n2、打开下载文件\n3、下载')

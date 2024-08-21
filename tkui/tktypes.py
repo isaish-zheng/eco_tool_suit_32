@@ -64,11 +64,14 @@ class GetDpiMixIn(object):
     """
 
     @staticmethod
-    def get_dpi(pixel):
+    def get_dpi(pixel: int) -> int:
         """
         根据dpi缩放因子，计算缩放后的像素
+
         :param pixel: 像素
+        :type pixel: int
         :return: 缩放后的像素
+        :rtype: int
         """
         # 获取屏幕的缩放因子
         scale_factor = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100
@@ -82,9 +85,18 @@ class GetDpiMixIn(object):
 class TkFrame(tk.Frame, GetDpiMixIn):
     """
     自定义Frame容器类，继承tk.Frame
+    :param arg: 位置参数
+    :param kwargs: 关键字参数；
+        master：父控件；
+        bg：背景色；
+        borderwidth：边框宽度；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
+
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_FRAME_BG)
         borderwidth = kwargs.get('borderwidth', 0)
@@ -102,9 +114,22 @@ class TkFrame(tk.Frame, GetDpiMixIn):
 class TkButton(tk.Button, GetDpiMixIn):
     """
     自定义Button按钮类，继承tk.Button
+
+    :param arg: 位置参数
+    :param kwargs: 关键字参数
+        master：父控件；
+        bg：背景色；fg：前景色；
+        activebackground：激活背景色；activeforeground：激活前景色；
+        borderwidth：边框宽度；
+        text：文本；font：字体；
+        command：事件；
+        state：状态；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_BUTTON_BG)
         fg = kwargs.get('fg', COLOR_BUTTON_FG)
@@ -132,9 +157,22 @@ class TkButton(tk.Button, GetDpiMixIn):
 class TkLabel(tk.Label, GetDpiMixIn):
     """
     自定义Label标签类，继承tk.Label
+
+    :param arg: 位置参数
+    :param kwargs: 关键字参数；
+        master：父控件；
+        bg：背景色；fg：前景色；
+        borderwidth：边框宽度；
+        text：文本；font：字体；
+        relief：边框样式；
+        justify：对齐方式；
+        anchor：文本位置；
+        wraplength：文本换行长度；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_FRAME_BG)
         fg = kwargs.get('fg', 'black')
@@ -161,9 +199,22 @@ class TkLabel(tk.Label, GetDpiMixIn):
 class TkCombobox(ttk.Combobox, GetDpiMixIn):
     """
     自定义Combobox下拉列表类，继承ttk.Combobox
+
+    :param arg: 位置参数
+    :param kwargs: 关键字参数；
+        master：父控件；
+        bg：背景色；fg：前景色；
+        values：可选的值；
+        font：字体；
+        textvariable：文本变量；
+        command：事件；
+        state：状态；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_FRAME_BG)
         fg = kwargs.get('fg', 'black')
@@ -190,9 +241,22 @@ class TkCombobox(ttk.Combobox, GetDpiMixIn):
 class TkEntry(tk.Entry, GetDpiMixIn):
     """
     自定义Entry输入框类，继承tk.Entry
+
+    :param arg: 位置参数
+    :param kwargs: 关键字参数；
+        master：父控件；
+        bg：背景色；fg：前景色；
+        borderwidth：边框宽度；
+        font：字体；
+        textvariable：文本变量；
+        relief：边框样式；
+        justify：对齐方式；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_FRAME_BG)
         fg = kwargs.get('fg', 'black')
@@ -219,9 +283,22 @@ class TkEntry(tk.Entry, GetDpiMixIn):
 class TkText(tk.Text, GetDpiMixIn):
     """
     自定义Text多行文本框类，继承tk.Text，可添加滚动条
+
+    :param arg: 位置参数
+    :param kwargs: 关键字参数；
+        master：父控件；
+        bg：背景色；fg：前景色；
+        borderwidth：边框宽度；
+        font：字体；
+        relief：边框样式；
+        wrap：换行边界；
+        state：状态；
+        x：x坐标；y：y坐标；
+        width：宽度；height：高度
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         self.master = kwargs.get('master', None)
         bg = kwargs.get('bg', COLOR_LABEL_BG)
         fg = kwargs.get('fg', COLOR_LABEL_FG)
@@ -261,9 +338,12 @@ class TkText(tk.Text, GetDpiMixIn):
 
         self.bind("<Button-3>", lambda e: text_info_menu.post(e.x_root + 10, e.y_root))
 
-    def __save_log(self):
+    def __save_log(self) -> str:
         """
         保存flash日志
+
+        :return: 保存成功信息
+        :rtype: str
         """
         try:
             filepath = r'.\logging.log'
@@ -276,7 +356,12 @@ class TkText(tk.Text, GetDpiMixIn):
             msg = f'保存失败 {os.path.abspath(filepath)}'
             raise Exception(msg)
 
-    def creat_scrollbar(self):
+    def creat_scrollbar(self) -> None:
+        """
+        创建滚动条
+
+        """
+
         # 创建样式
         style = ttk.Style()
         style.theme_use('vista')
@@ -319,11 +404,19 @@ class TkText(tk.Text, GetDpiMixIn):
 class TkTreeView(ttk.Treeview, GetDpiMixIn):
     """
     自定义Treeview树形图，继承ttk.Treeview
+
+    :param args: 位置参数
+    :param kwargs: 关键字参数；
+        master: 父控件；
+        show: 显示类型；
+        selectmode: 选择模式；
+        style: 样式；
+        x: x坐标；y: y坐标；
+        width: 宽度；height: 高度；
     """
 
-    # t = ttk.Treeview()
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
         self.master = kwargs.get('master', None)
         show = kwargs.get('show', ["tree"])
         selectmode = kwargs.get('selectmode', "browse")
@@ -343,7 +436,11 @@ class TkTreeView(ttk.Treeview, GetDpiMixIn):
         # self.bind("<Leave>", lambda e: master.focus_set())  # 焦点定位到其它控件，这样下拉控件选中背景会消失
         # self.bind('<<ComboboxSelected>>', lambda e: command and command())
 
-    def create_scrollbar(self):
+    def create_scrollbar(self) -> None:
+        """
+        创建滚动条
+
+        """
         # 创建样式
         style = ttk.Style()
         style.theme_use('vista')

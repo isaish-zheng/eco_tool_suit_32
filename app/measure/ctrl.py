@@ -30,8 +30,8 @@ from eco.pcandrive import pcanbasic
 from srecord import Srecord
 from utils import singleton
 
-from .model import MeasureModel, TableItem, MonitorItem
-from .view import MeasureView
+from .model import MeasureModel, TableItem, MonitorItem, Measurement
+from .view import MeasureView, TkTreeView
 from ..download.model import DownloadModel
 
 
@@ -43,6 +43,17 @@ from ..download.model import DownloadModel
 class MeasureCtrl(object):
     """
     测量界面的业务逻辑处理
+
+    :param model: 测量视图的数据模型
+    :type model: MeasureModel
+    :param view: 测量视图
+    :type view: MeasureView
+    :param extra_model: 其它界面的数据模型，用于当前窗口使用其它窗口的数据
+    :type extra_model: DownloadModel
+    :param text_log: 日志输出函数
+    :type text_log: callable
+    :param cfg_path: 下载程序、监视测量对象的配置文件路径
+    :type cfg_path: tuple[str, str]
     """
 
     def __init__(self,
@@ -50,14 +61,9 @@ class MeasureCtrl(object):
                  view: MeasureView,
                  extra_model: DownloadModel,
                  text_log: callable,
-                 cfg_path: tuple[str, str]):
+                 cfg_path: tuple[str, str]) -> None:
         """
-        初始化测量界面业务逻辑处理
-        :param model: 界面的数据模型
-        :param view: 界面的视图
-        :param extra_model: 其它界面的数据模型，用于当前窗口使用其它窗口的数据
-        :param text_log: 日志输出函数
-        :param cfg_path: 各配置文件路径
+        构造函数
         """
         self.model = model
         self.view = view
@@ -85,9 +91,10 @@ class MeasureCtrl(object):
         # 将eco_pccp模块中的打印执行结果内容重定向为text_log，把信息打印到ui显示
         eco_pccp.Measure.print_detail = self.text_log  # 打印执行信息
 
-    def try_reset_pcan_device(self):
+    def try_reset_pcan_device(self) -> None:
         """
         尝试复位pcan设备
+
         """
         try:
             obj_pcan = pcanbasic.PCANBasic()
@@ -103,9 +110,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def text_log(self, txt: str, *args, **kwargs):
+    def text_log(self, txt: str, *args, **kwargs) -> None:
         """
         text_log打印日志到根界面的日志窗口
+
         :param txt: 待写入的信息
         :param args: 位置参数列表，第一个参数为文字颜色
             None-灰色,'done'-绿色,'warning'-黄色,'error'-红色
@@ -113,9 +121,10 @@ class MeasureCtrl(object):
         """
         self.__text_log(txt, *args, **kwargs)
 
-    def ini_config(self):
+    def ini_config(self) -> None:
         """
         初始化配置文件，若配置文件不存在，则新建配置
+
         """
         try:
             if not os.path.isfile(self.__cfg_measure_path):
@@ -131,9 +140,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def load_config(self):
+    def load_config(self) -> None:
         """
         加载配置文件到视图数据模型
+
         """
         try:
             conf = configparser.ConfigParser()
@@ -148,9 +158,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def save_config(self):
+    def save_config(self) -> None:
         """
         保存配置到配置文件
+
         """
         try:
             # 保存配置
@@ -173,9 +184,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def deal_file(self):
+    def deal_file(self) -> None:
         """
         从数据模型中获取PGM和A2L文件路径，解析文件，显示文件信息，并将所需数据存储到视图的数据模型中
+
         """
         try:
             msg_his = ''
@@ -274,14 +286,16 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_closing(self):
+    def handler_on_closing(self) -> None:
         """
         关闭topui窗口时触发的功能
+
         """
 
         def _callback(future):
             """
             断开连接任务完成后退出
+
             """
             try:
                 if future and future.exception():
@@ -303,9 +317,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_open_file(self):
+    def handler_on_open_file(self) -> None:
         """
         打开按钮的回调函数，打开PGM和A2L文件并解析，获取需要的数据保存至数据模型
+
         """
         try:
             # 打开程序文件路径
@@ -320,9 +335,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_search_measurement_item(self):
+    def handler_on_search_measurement_item(self) -> None:
         """
         输入搜索框时触发的回调函数，筛选包含指定字符的数据项显示
+
         """
         try:
             # 筛选数据项，filter返回的是浅拷贝的迭代器，每次迭代的元素内容指向对应原始数据项的内容
@@ -336,17 +352,22 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_select_measurement_item(self, event: Event):
+    def handler_on_select_measurement_item(self, event: Event) -> None:
         """
         鼠标点击选择数据项的回调函数，根据鼠标点选时所在的列，设置通道选择标识
+
         :param event: 事件
+        :type event: Event
         """
 
-        def _get_idx_from_id(item_id):
+        def _get_idx_from_id(item_id: str) -> tuple[int, TableItem]:
             """
-            根据表格item_id获取此数据项对应的原始数据项列表中的索引
+            根据表格item_id获取此数据项对应的测量数据项选择列表中的索引
+
             :param item_id: 表格数据项id
+            :type item_id: str
             :return: (index,当前数据项TableItem对象)
+            :rtype: tuple[int, TableItem]
             """
             # 获取最新选中数据项的值
             item_values = self.view.table_measurement.item(item_id, "values")
@@ -406,9 +427,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_ack_selected_measurements(self):
+    def handler_on_ack_selected_measurements(self) -> None:
         """
         添加选中测量项到监视表格，并获取监视数据项属性
+
         """
         try:
             # 清空数据模型中监视数据项列表
@@ -481,9 +503,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_cancel_selected_measurements(self):
+    def handler_on_cancel_selected_measurements(self) -> None:
         """
         取消选中测量项
+
         """
         try:
             # 清除所有原始数据项的选中状态
@@ -510,9 +533,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_delete_minitor_item(self):
+    def handler_on_delete_minitor_item(self) -> None:
         """
         删除监视项
+
         """
         # 若已启动测量，则不允许删除
         if self.model.obj_measure.has_measured:
@@ -533,9 +557,10 @@ class MeasureCtrl(object):
         self.handler_on_cancel_selected_measurements()
         self.handler_on_ack_selected_measurements()
 
-    def handler_on_connect(self):
+    def handler_on_connect(self) -> None:
         """
         连接
+
         """
 
         def _callback(future):
@@ -580,9 +605,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_disconnect(self):
+    def handler_on_disconnect(self) -> None:
         """
         断开连接
+
         """
 
         def _callback(future):
@@ -614,24 +640,29 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_start_measure(self):
+    def handler_on_start_measure(self) -> None:
         """
         启动测量
+
         """
 
         def _get_daqs_cfg():
             """
             获取daq列表信息任务
+
             """
             try:
-                daqs_cfg: Dict[int, Dict[str, int]] = {}
+                # daq列表信息
+                # 例如{1: {'first_pid': 0x3c, 'odts_size': 0x20},
+                #     2: {'first_pid': 0x78, 'odts_size': 0x30}}
+                daqs_cfg: dict[int, dict[str, int]] = {}
 
                 # 获取daq的信息
                 daq_cfg_list = [self.model.obj_measure.get_daq_cfg(daq_number=1),
                                 self.model.obj_measure.get_daq_cfg(daq_number=2)]
                 for daq_cfg in daq_cfg_list:
                     daq_number = daq_cfg[0]  # daq列表序号
-                    first_pid = daq_cfg[1]  # daq中首歌odt的pid
+                    first_pid = daq_cfg[1]  # daq中首个odt的pid
                     odts_size = daq_cfg[2]  # daq中odt列表的的大小
                     daqs_cfg[daq_number] = {'first_pid': int(first_pid, 16), 'odts_size': int(odts_size, 16)}
                 # 保存daq列表信息到数据模型
@@ -644,6 +675,7 @@ class MeasureCtrl(object):
         def _get_daqs(future):
             """
             获取daq列表任务
+
             :param future: 任务执行结束返回的future对象
             """
             try:
@@ -661,6 +693,7 @@ class MeasureCtrl(object):
         def _start_measure(future):
             """
             启动测量任务
+
             :param future: 任务执行结束返回的future对象
             """
             try:
@@ -679,6 +712,7 @@ class MeasureCtrl(object):
         def _recv_daq_dto(future):
             """
             解析daq_dto任务
+
             :param future: 任务执行结束返回的future对象
             """
             try:
@@ -708,6 +742,7 @@ class MeasureCtrl(object):
         def _done(future):
             """
             结束
+
             :param future: 任务执行结束返回的future对象
             """
             try:
@@ -728,14 +763,16 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_stop_measure(self):
+    def handler_on_stop_measure(self) -> None:
         """
         停止测量
+
         """
 
         def _callback(future):
             """
-            线程执行结束的回调函数、
+            线程执行结束的回调函数
+
             :param future: 线程执行结束返回的future对象
             """
             try:
@@ -760,9 +797,10 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def __create_measure_obj(self):
+    def __create_measure_obj(self) -> None:
         """
         创建测量对象
+
         """
         try:
             # 借用cfg_download的一些配置
@@ -787,10 +825,11 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def __open_file(self, filetype: str, **kwargs):
+    def __open_file(self, filetype: str, **kwargs) -> None:
         """
         打开文件，将文件路径存储到数据模型
-        :param filetype: 文件类型
+
+        :param filetype: 文件类型:'程序'，'测量标定'
         :param kwargs: 关键字参数，lbl为显示已打开文件路径的标签控件，dir为要打开文件的初始路径
         """
         if filetype == '程序':
@@ -832,9 +871,10 @@ class MeasureCtrl(object):
             # 输出日志
             self.text_log('路径无效，未选择' + filetype + '文件' + openpath, 'warning')
 
-    def __flush_table_selection(self):
+    def __flush_table_selection(self) -> None:
         """
         从数据模型中刷新显示选择数据表
+
         """
         # 清空所有数据项
         self.view.table_measurement.delete(*self.view.table_measurement.get_children())
@@ -849,9 +889,10 @@ class MeasureCtrl(object):
                                                text="",
                                                values=values)
 
-    def __flush_table_monitor(self):
+    def __flush_table_monitor(self) -> None:
         """
         从数据模型中刷新显示监视数据表
+
         """
         # 清空所有数据项
         self.view.table_monitor.delete(*self.view.table_monitor.get_children())
@@ -869,32 +910,40 @@ class MeasureCtrl(object):
     def __flush_label_selection_number(self):
         """
         刷新显示已选数据项数目和当前筛选出的数据项数目
+
         """
         selected_num = len([item for item in self.model.table_measurement_raw_items if item.is_selected])
         filter_num = len(self.view.table_measurement.get_children())  # 不能根据数据模型中filter_items计算，因为其为迭代器，可能已被遍历过
         text = str(selected_num) + '/' + str(filter_num)
         self.view.label_selection_number.config(text=text)
 
-    def __flush_label_monitor_number(self):
+    def __flush_label_monitor_number(self) -> None:
         """
         刷新显示监视数据项数目
+
         """
         monitor_num = len([item for item in self.model.table_monitor_items])
         self.view.label_monitor_number.config(text=monitor_num)
 
     @staticmethod
-    def __show_property(from_obj, to_table):
+    def __show_property(from_obj: Measurement, to_table: TkTreeView) -> None:
         """
         显示对象的属性到表格控件
+
         :param from_obj: 待显示属性的对象
+        :type from_obj: Measurement
         :param to_table: 显示属性内容的表格控件
+        :type to_table: TkTreeView
         """
 
-        def _get_attributes(obj):
+        def _get_attributes(obj: Measurement) -> list[str]:
             """
             获取对象的所有属性，过滤掉以'__'开头和结尾的特殊属性，并且排除方法
+
             :param obj: 对象
+            :type obj: Measurement
             :return: 属性列表
+            :rtype: list[str]
             """
             return [attr for attr in dir(obj) if not attr.startswith("__") and not callable(getattr(obj, attr))]
 
@@ -910,24 +959,44 @@ class MeasureCtrl(object):
                                 values=(attribute, getattr(from_obj, attribute)),
                                 )
 
-    def __get_daqs(self, daqs_cfg: Dict[int, Dict[str, int]]):
+    def __get_daqs(self, daqs_cfg: dict[int, dict[str, int]]) -> dict[int, dict[int, list[MonitorItem]]]:
         """
-        将监视数据项按daq分配到各odt
+        将监视数据项按daq分配到各odt，得到daq分配列表
+
         :param daqs_cfg: daq配置，{daq_number: {first_pid: int, odts_size: int}}
-        :return: daqs，daq列表，Dict[int, Dict[int, List[MonitorItem]]]
+        :type daqs_cfg: dict[int, dict[str, int]]
+        :return: daqs，daq列表，{daq_number: {odt_number: [item, ...]}}，
+            例如{ 1: {0: [item0, item1],
+                     1: [item2, item3, item4]
+                     },
+                 2: {0: [item5, item6, item7],
+                     1: [item8, item9, item10, item11]
+                    }
+                }
+        :rtype: dict[int, dict[int, list[MonitorItem]]]
+        :raises Exception: 数据项的转换系数不被支持；分配daq超过odt列表允许的最大范围；
         """
 
-        def _write_odts(group_of_daq: List[MonitorItem]):
+        def _write_odts(group_of_daq: list[MonitorItem]) -> dict[int, list[MonitorItem]]:
             """
             将指定daq的监视数据项分配到各odt中
+
             :param group_of_daq: 指定daq的监视数据项列表
-            :return: odts，指定daq的odt列表
+            :type group_of_daq: list[MonitorItem]
+            :return: odts，指定daq的odt列表，例如{0: [item0, item1], 1: [item2, item3, item4]}，
+                键0是本daq的odt列表序号为0的odt，值[item0, item1]为该odt中包含的监视数据项列表
+            :rtype: dict[int, list[MonitorItem]]
+            :raises ValueError: 数据项的元素大小属性值不是1,2,4中的一个
             """
 
-            def _get_free_memory_of_odt(odt: List[MonitorItem]):
+            def _get_free_memory_of_odt(odt: list[MonitorItem]) -> int:
                 """
                 获取odt空闲容量
+
                 :param odt: 元素为MonitorItem对象的列表，元素大小总和不超过7字节
+                :type odt: list[MonitorItem]
+                :return: 空闲容量，单位字节
+                :rtype: int
                 """
                 res = 0
                 for element in odt:
@@ -935,7 +1004,7 @@ class MeasureCtrl(object):
                 return 7 - res
 
             # 声明变量
-            odts: Dict[int, List[MonitorItem]] = {}  # odt列表
+            odts: dict[int, list[MonitorItem]] = {}  # odt列表
             ptr_4byte = 0  # 4字节odt指针，大小为4字节的元素所在odt的列表索引
             ptr_2byte = 0  # 2字节odt指针，大小为2字节的元素所在odt的列表索引
             ptr_1byte = 0  # 1字节odt指针，大小为1字节的元素所在odt的列表索引
@@ -989,13 +1058,13 @@ class MeasureCtrl(object):
         self.text_log('------分配daq------')
 
         # 根据速率对监视数据项分组
-        group_by_daq: Dict[int, List[MonitorItem]] = {}  # 根据daq对监视数据项分组的结果
+        group_by_daq: dict[int, list[MonitorItem]] = {}  # 根据daq对监视数据项分组的结果
         for key, group in groupby(sorted(self.model.table_monitor_items, key=lambda x: x.daq_number),
                                   key=lambda x: x.daq_number):
             group_by_daq[key] = list(group)
 
         # 写入daq列表
-        daqs: Dict[int, Dict[int, List[MonitorItem]]] = {}  # daq列表
+        daqs: dict[int, dict[int, list[MonitorItem]]] = {}  # daq列表
         for daq_number in group_by_daq.keys():
             daqs[daq_number] = _write_odts(group_of_daq=group_by_daq[daq_number])
 
@@ -1037,19 +1106,23 @@ class MeasureCtrl(object):
                     # self.text_log(msg)
         return daqs  # 返回daq列表
 
-    def __recv_daq_dto(self):
+    def __recv_daq_dto(self) -> None:
         """
         解析daq_dto数据
         """
 
-        def _get_physical_value(item: MonitorItem, element_data: List[int]):
+        def _get_physical_value(item: MonitorItem, element_data: list[int]) -> str:
             """
-            根据元素的字节序列，求其物理值
-            raw_value = f(physical_value)
-            f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
+            根据元素的字节序列，求其物理值;
+            raw_value = f(physical_value);
+            f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F);
+
             :param item: 监视数据项
+            :type item: MonitorItem
             :param element_data: 字节序列
-            :return: 物理值(str)
+            :type element_data: list[int]
+            :return: 物理值
+            :rtype: str
             """
 
             # def _solve_data(item: MonitorItem, element_data: List[int], signed: bool):
@@ -1077,7 +1150,7 @@ class MeasureCtrl(object):
 
             # 根据不同类型和转换方法求解物理值
 
-            value = -333333333.3
+            value = '-333333333.3'
             raw_value = None
             if item.data_type == 'UBYTE':
                 raw_value = int.from_bytes(bytes(element_data), 'big', signed=False)  # 原始值
@@ -1109,6 +1182,7 @@ class MeasureCtrl(object):
         def _put_to_queue(data):
             """
             将数据放入队列
+
             :param data: 待放入队列的数据
             """
             try:
@@ -1118,7 +1192,8 @@ class MeasureCtrl(object):
 
         self.text_log("接收数据中 . . .", 'done')
 
-        display_values: Dict[int, str] = {}  # 待显示的值
+        # 待显示的值{在监视数据项列表中的索引:int，物理值:str}
+        display_values: dict[int, str] = {}
         # 创建后台执行的 schedulers
         scheduler_recv = BackgroundScheduler()
         # 添加调度任务
@@ -1193,7 +1268,7 @@ class MeasureCtrl(object):
                                                      element_data=element_data)
                 display_values[item.idx_in_monitor_items] = physical_value
 
-    def __display_monitor_value(self):
+    def __display_monitor_value(self) -> None:
         """
         显示value值到监视表格
         """

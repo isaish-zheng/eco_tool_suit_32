@@ -923,6 +923,7 @@ class PCAN_ISO_TP_2016:
 
         """
         Adds a PCANTP message to the Transmit queue
+
         parameters:
          channel: A PCANTP Channel Handle representing a PCANTP-Client
          msg_buffer: A cantp_msg buffer with the message to be sent
@@ -1298,6 +1299,7 @@ class PCAN_ISO_TP_2016:
 
         """
         Deallocates a PCAN-TP message
+
         parameters:
          msg_buffer: An allocated cantp_msg structure buffer.
         returns: A cantp_status code. PCANTP_STATUS_OK is returned on success

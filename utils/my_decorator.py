@@ -6,11 +6,25 @@
 # @function: 装饰器
 
 
-def singleton(cls):
+##############################
+# Module imports
+##############################
+
+from typing import Any
+
+
+##############################
+# Function declarations
+##############################
+
+def singleton(cls: Any) -> Any:
     """
     单例模式装饰器
+
     :param cls: 被装饰的类
+    :type cls: Any
     :return: 单例对象
+    :rtype: Any
     """
     instances = {}
 

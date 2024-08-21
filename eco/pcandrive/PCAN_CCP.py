@@ -157,7 +157,8 @@ class PcanCCP:
       PCAN-CCP class implementation
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """构造函数"""
         # Loads the PCAN-CCP API
         if platform.system() == 'Windows':
             # Loads the API on Windows
