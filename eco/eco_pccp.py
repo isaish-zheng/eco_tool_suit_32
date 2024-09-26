@@ -1504,12 +1504,14 @@ class Measure(object):
         """
         print(txt)
 
-    def connect(self, epk_addr: str) -> str | None:
+    def connect(self, epk_addr: str, epk_len: int) -> str | None:
         """
         连接流程
 
         :param epk_addr: 参数epk信息的首地址(0x开头的16进制)
         :type epk_addr: str
+        :param epk_len: 参数epk信息的长度(字节数)
+        :type epk_len: int
         :returns: 若执行成功，返回epk字符串；否则返回None
         :rtype: str or None
         """
@@ -1529,10 +1531,15 @@ class Measure(object):
             obj_pccp.set_mta(mta=0,
                              addr_offset=0,
                              addr_base=addr)
+            upd_sum = epk_len
             while True:
-                exec_result = obj_pccp.upload(size=0x5)
-                epk.append(exec_result.data)
-                if exec_result.data[-1] == 0x00:
+                if upd_sum >= 0x5:
+                    exec_result = obj_pccp.upload(size=0x5)
+                    epk.append(exec_result.data)
+                    upd_sum -= 0x5
+                else:
+                    exec_result = obj_pccp.upload(size=upd_sum)
+                    epk.append(exec_result.data)
                     break
             return b''.join(epk).decode('utf-8').rstrip('\x00')
 
