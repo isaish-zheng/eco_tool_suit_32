@@ -597,7 +597,7 @@ class MeasureCtrl(object):
             # 创建测量对象
             self.__create_measure_obj()
             # 建立连接
-            self.__pool.submit(self.model.obj_measure.connect, self.model.a2l_epk_addr).add_done_callback(_callback)
+            self.__pool.submit(self.model.obj_measure.connect, self.model.a2l_epk_addr, len(self.model.a2l_epk)).add_done_callback(_callback)
             # print("当前线程数量为", threading.active_count())
             # print("所有线程的具体信息", threading.enumerate())
             # print("当前线程具体信息", threading.current_thread())
