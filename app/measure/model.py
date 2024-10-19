@@ -13,7 +13,7 @@ from tkinter import StringVar
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
 
-from xba2l.a2l_lib import Module, Measurement, CompuMethod
+from xba2l.a2l_lib import Module, Measurement, CompuMethod, CompuVtab
 
 from eco import eco_pccp
 from utils import singleton
@@ -72,6 +72,12 @@ class MonitorItem(object):
     :type data_type: str
     :param conversion: 转换方法
     :type conversion: str
+    :param conversion_type: 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
+    :type conversion_type: str
+    :param compu_tab_ref: 转换映射名称
+    :type compu_tab_ref: str
+    :param compu_vtab: 转换映射表
+    :type compu_vtab: dict[int,str]
     :param coeffs: 转换系数(A,B,C,D,E,F)
     :type coeffs: Tuple[float, float, float, float, float, float]
     :param format: 显示格式(整数位数，小数位数)
@@ -101,6 +107,9 @@ class MonitorItem(object):
 
     data_type: str = ''  # 数据类型
     conversion: str = ''  # 转换方法
+    conversion_type: str = ''  # 转换类型('RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
+    compu_tab_ref: str = ''  # 转换映射名称
+    compu_vtab: dict[int,str] = None  # 转换映射表
     coeffs: Tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)
     format: Tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
 
@@ -131,7 +140,8 @@ class MeasureModel(object):
         'SWORD': 2,
         'ULONG': 4,
         'SLONG': 4,
-        'FLOAT32_IEEE': 4
+        'FLOAT32_IEEE': 4,
+        'FLOAT64_IEEE': 8 # 不支持，此类型数据会被过滤掉
     }
 
     def __init__(self):
@@ -155,6 +165,7 @@ class MeasureModel(object):
         self.a2l_module: Module = None  # 存储A2L文件解析后的模块对象
         self.a2l_measurements: list[Measurement] = []  # 存储A2L文件解析后的测量对象列表
         self.a2l_conversions: list[CompuMethod] = []  # 存储A2L文件解析后的转换方法列表
+        self.a2l_compu_vtabs: list[CompuVtab] = []  # 存储A2L文件解析后的转换映射列表
 
         # 下面列表中元素实际指向的内容是相同的，即filter_items由raw_items经浅拷贝得到
         self.table_measurement_raw_items: list[TableItem] = []  # 存储选择表格所有的数据项内容

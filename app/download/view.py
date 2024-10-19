@@ -299,11 +299,11 @@ class DownloadView(tk.Tk, GetDpiMixIn):
 
         """
         msg = ('产品信息: \n'
-               '    Eco Tool Suit\n'
+               '    Eco Tool Suit V1.1.0\n'
                '    Author: ZYD\n\n'
                '本产品包含: \n'
-               '    Eco Downloader V1.0.0\n'
-               '    Eco Viewer V1.0.0\n')
+               '    Eco Downloader\n'
+               '    Eco Viewer\n')
         messagebox.showinfo(title='关于', message=msg)
 
     @staticmethod

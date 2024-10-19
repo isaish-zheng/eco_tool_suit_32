@@ -28,7 +28,7 @@ from xba2l.a2l_util import parse_a2l  # 解析a2l文件
 from eco import eco_pccp
 from eco.pcandrive import pcanbasic
 from srecord import Srecord
-from utils import singleton
+from utils import singleton, pad_hex
 
 from .model import MeasureModel, TableItem, MonitorItem, Measurement
 from .view import MeasureView, TkTreeView
@@ -229,7 +229,10 @@ class MeasureCtrl(object):
                 self.model.a2l_epk = module.mod_par.epk
 
                 # 获取a2l测量对象，保存到视图数据模型中
-                measurements = copy.deepcopy(module.measurements)
+                # 筛选指定数据项，filter返回的是浅拷贝的迭代器，每次迭代的元素内容指向module.measurements列表中的元素内容
+                measurements = filter(lambda item: item.data_type != "FLOAT64_IEEE",
+                                        module.measurements)
+                measurements = copy.deepcopy(list(measurements))
                 measurements.sort(key=lambda item: item.name)
                 self.model.a2l_measurements = measurements
 
@@ -237,6 +240,11 @@ class MeasureCtrl(object):
                 compu_methods = copy.deepcopy(module.compu_methods)
                 compu_methods.sort(key=lambda item: item.name)
                 self.model.a2l_conversions = compu_methods
+
+                # 获取a2l转换映射表
+                compu_vtabs = copy.deepcopy(module.compu_vtabs)
+                compu_vtabs.sort(key=lambda item: item.name)
+                self.model.a2l_compu_vtabs = compu_vtabs
 
                 # 初始化选择表格数据项内容，保存到视图数据模型
                 self.model.table_measurement_raw_items.clear()
@@ -446,6 +454,8 @@ class MeasureCtrl(object):
 
             # 获取转换方法名称列表
             conversion_names = [conversion.name for conversion in self.model.a2l_conversions]
+            # 获取转换映射表名称列表
+            compu_vtab_names = [compu_vtab.name for compu_vtab in self.model.a2l_compu_vtabs]
             # 获取监视表格数据项与原始测量对象的索引映射List[Tuple(idx_in_monitor_items,idx_in_a2l_measurements)]
             idx_map_list: List[Tuple[int, int]] = []
             for idx_in_monitor_items in range(len(self.model.table_monitor_items)):
@@ -467,8 +477,30 @@ class MeasureCtrl(object):
                     idx_in_monitor_items].idx_in_a2l_measurements = idx_in_a2l_measurements
                 # 数据类型属性
                 self.model.table_monitor_items[idx_in_monitor_items].data_type = obj_msr.data_type
+                print(f"数据类型：{obj_msr.data_type}")
                 # 转换方法属性
                 self.model.table_monitor_items[idx_in_monitor_items].conversion = obj_msr.conversion
+                print(f"转换方法：{obj_msr.conversion}")
+                print(self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)])
+                # 转换类型属性
+                self.model.table_monitor_items[idx_in_monitor_items].conversion_type = (
+                    self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].conversion_type)
+                print(f"转换类型：{self.model.table_monitor_items[idx_in_monitor_items].conversion_type}")
+                # 转换映射名称属性
+                self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref = (
+                    self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].compu_tab_ref)
+                print(
+                    f"转换映射名称：{self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref}")
+                # 转换映射表属性
+                # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
+                if self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref in compu_vtab_names:
+                    self.model.table_monitor_items[idx_in_monitor_items].compu_vtab = (
+                        self.model.a2l_compu_vtabs[
+                            compu_vtab_names.index(
+                                self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref)].read_dict)
+                print(
+                    f"转换映射表：{self.model.table_monitor_items[idx_in_monitor_items].compu_vtab}")
+
                 # 单位属性
                 self.model.table_monitor_items[idx_in_monitor_items].unit = (
                     self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].unit)
@@ -539,7 +571,7 @@ class MeasureCtrl(object):
 
         """
         # 若已启动测量，则不允许删除
-        if self.model.obj_measure.has_measured:
+        if hasattr(self.model.obj_measure, 'has_measured') and self.model.obj_measure.has_measured:
             return
 
         # 获取选中数据项的id元祖
@@ -1069,27 +1101,31 @@ class MeasureCtrl(object):
             daqs[daq_number] = _write_odts(group_of_daq=group_by_daq[daq_number])
 
         # 判断转换系数是否被支持，以及odt列表是否超出允许的长度
-        msg_out_coeffs = ''
-        msg_out_range = ''
+        msg_exception_coeffs = ''
+        msg_exception_outrange = ''
         for daq_number, odts in daqs.items():
             # 若odt列表中存在转换系数不被支持的数据项，则抛出异常
             for _, odt in odts.items():
                 for item in odt:
-                    A, B, C, D, E, F = item.coeffs
-                    if (A > 1e-6) or (D > 1e-6) or (E > 1e-6) or (F - 1.0 > 1e-6):
-                        msg_out_coeffs += f"{item.name}的转换系数{item.coeffs}不支持\n"
-            if msg_out_coeffs:
+                    # 普通数值转换类型
+                    # raw_value = f(physical_value)
+                    # f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
+                    if item.conversion_type == "RAT_FUNC":
+                        A, B, C, D, E, F = item.coeffs
+                        if (A > 1e-6) or (D > 1e-6) or (E > 1e-6) or (F - 1.0 > 1e-6):
+                            msg_exception_coeffs += f"{item.name}的转换系数{item.coeffs}不支持\n"
+            if msg_exception_coeffs:
                 continue
             # 若odt列表超出允许的长度，则抛出异常
             if len(odts) >= daqs_cfg[daq_number]['odts_size']:
-                msg_out_range = f"daq{daq_number}中odt至多为{daqs_cfg[daq_number]['odts_size']},无法容纳以下对象:\n"
+                msg_exception_outrange = f"daq{daq_number}中odt至多为{daqs_cfg[daq_number]['odts_size']},无法容纳以下对象:\n"
                 for idx in range(daqs_cfg[daq_number]['odts_size'], len(odts)):
                     for item in odts[idx]:
-                        msg_out_range += f"   {item.name}\n"
-        if msg_out_coeffs:
-            raise Exception(msg_out_coeffs)
-        if msg_out_range:
-            raise Exception(msg_out_range)
+                        msg_exception_outrange += f"   {item.name}\n"
+        if msg_exception_coeffs:
+            raise Exception(msg_exception_coeffs)
+        if msg_exception_outrange:
+            raise Exception(msg_exception_outrange)
 
         # 获取监视数据项的属性，打印odt列表
         self.text_log('分配完成')
@@ -1108,7 +1144,7 @@ class MeasureCtrl(object):
 
     def __recv_daq_dto(self) -> None:
         """
-        解析daq_dto数据
+        解析daq_dto数据为显示格式的数据，将其压入队列
         """
 
         def _get_physical_value(item: MonitorItem, element_data: list[int]) -> str:
@@ -1170,7 +1206,14 @@ class MeasureCtrl(object):
                 # 对于64位浮点数，使用'd'。
                 # 如果bytes表示的是大端序，可以使用'!'作为格式字符串的前缀来指定字节顺序。
                 value = unpack('!f', bytes(element_data))[0]
-            if raw_value is not None:
+
+            # 若是转换类型为映射表
+            if (raw_value is not None) and (item.conversion_type == "TAB_VERB"):
+                value = raw_value
+                return ''.join([item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
+
+            # 若是转换类型为普通数值
+            if (raw_value is not None) and (item.conversion_type == "RAT_FUNC"):
                 value = (raw_value - item.coeffs[2]) / item.coeffs[1]
             # 格式化
             fm = item.format
