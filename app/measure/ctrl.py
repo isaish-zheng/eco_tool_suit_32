@@ -477,20 +477,14 @@ class MeasureCtrl(object):
                     idx_in_monitor_items].idx_in_a2l_measurements = idx_in_a2l_measurements
                 # 数据类型属性
                 self.model.table_monitor_items[idx_in_monitor_items].data_type = obj_msr.data_type
-                print(f"数据类型：{obj_msr.data_type}")
                 # 转换方法属性
                 self.model.table_monitor_items[idx_in_monitor_items].conversion = obj_msr.conversion
-                print(f"转换方法：{obj_msr.conversion}")
-                print(self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)])
                 # 转换类型属性
                 self.model.table_monitor_items[idx_in_monitor_items].conversion_type = (
                     self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].conversion_type)
-                print(f"转换类型：{self.model.table_monitor_items[idx_in_monitor_items].conversion_type}")
                 # 转换映射名称属性
                 self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref = (
                     self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].compu_tab_ref)
-                print(
-                    f"转换映射名称：{self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref}")
                 # 转换映射表属性
                 # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
                 if self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref in compu_vtab_names:
@@ -498,8 +492,6 @@ class MeasureCtrl(object):
                         self.model.a2l_compu_vtabs[
                             compu_vtab_names.index(
                                 self.model.table_monitor_items[idx_in_monitor_items].compu_tab_ref)].read_dict)
-                print(
-                    f"转换映射表：{self.model.table_monitor_items[idx_in_monitor_items].compu_vtab}")
 
                 # 单位属性
                 self.model.table_monitor_items[idx_in_monitor_items].unit = (
