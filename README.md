@@ -18,8 +18,9 @@
 > # 使用说明
 > ## 操作系统
 > **Windows10及以上版本(x86/x64)**
-> ## Python版本
-> **Pyhton3.10.11** [Python解释器下载](https://www.python.org/ftp/python/3.10.11/python-3.10.11.exe)
+> ## Python版本(32位)
+> * **Python3.10.11** [Python解释器下载](https://www.python.org/ftp/python/3.10.11/python-3.10.11.exe)
+> * **Python3.11.9** [Python解释器下载](https://www.python.org/ftp/python/3.11.9/python-3.11.9.exe)
 > ## 外部依赖（建议使用项目提供的文件）
 > 1. 安装PCAN驱动程序 [PEAK-System_Driver下载](https://peak-system.com.cn/wp-content/uploads/2024/07/PEAK-System_Driver-Setup-v4.5.0.zip)
 > 2. 将.dll文件按照如下路径放置
