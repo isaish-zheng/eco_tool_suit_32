@@ -61,7 +61,7 @@ class DownloadCtrl(object):
 
         self.__cfg_path = cfg_path
         self.__cfg_download_path = cfg_path[0]
-        self.__cfg_measure_path = cfg_path[1]
+        # self.__cfg_a2l_path = cfg_path[1]
 
         # 初始化配置
         self.ini_config()
@@ -397,20 +397,21 @@ class DownloadCtrl(object):
             # 创建model
             measure_model = MeasureModel()
             # 创建controller
-            download_ctrl = MeasureCtrl(model=measure_model,
-                                        view=measure_view,
-                                        extra_model=self.model,
-                                        text_log=self.text_log,
-                                        cfg_path=self.__cfg_path)
+            measure_ctrl = MeasureCtrl(model=measure_model,
+                                       view=measure_view,
+                                       extra_model=self.model,
+                                       text_log=self.text_log,
+                                       cfg_path=self.__cfg_path)
 
             # 显示子窗口内容
             measure_view.set_root_menu()
-            measure_view.set_measure_selection_frame(model=measure_model)
-            measure_view.set_measure_monitor_frame(model=measure_model)
-            measure_view.set_measure_property_frame(model=measure_model)
+            measure_view.set_select_measure_frame(model=measure_model)
+            measure_view.set_measure_frame(model=measure_model)
+            measure_view.set_select_calibrate_frame(model=measure_model)
+            measure_view.set_calibrate_frame(model=measure_model)
 
             # 启动时显示上一次打开的文件信息和数据
-            download_ctrl.deal_file()
+            measure_ctrl.deal_file()
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')

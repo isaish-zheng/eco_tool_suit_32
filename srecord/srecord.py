@@ -205,6 +205,28 @@ class Srecord(object):
             if int(erase_memory_info.erase_start_address32, 16) == int(epk_addr, 16):
                 return erase_memory_info.erase_data
 
+    def get_raw_value_from_cal(self, addr: int, offset: int, length: int) -> bytes:
+        """
+        从pgm标定区中获取指定地址和长度的原始值
+
+        :param addr: 标定区域首地址
+        :type addr: int
+        :param offset: 相对首地址的偏移地址(0基)
+        :type offset: int
+        :param length: 长度
+        :type length: int
+        :returns: 原始值
+        :rtype: list[int]
+        """
+        for erase_memory_info in self.__erase_memory_infos:
+            if int(erase_memory_info.erase_start_address32, 16) == addr:
+                cal_data = bytes.fromhex(erase_memory_info.erase_data)
+                raw_data = cal_data[offset:offset+length]
+                return raw_data
+        else:
+            msg = f"在Srecord文件中未找到地址为{hex(addr)}的标定数据区"
+            raise SrecordException(msg)
+
     @staticmethod
     def __check_all_sum(filepath: str) -> bool:
         """

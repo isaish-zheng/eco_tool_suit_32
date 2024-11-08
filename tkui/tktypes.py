@@ -13,7 +13,7 @@
 import ctypes
 import os
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, Event
 
 ##############################
 # Constant definitions
@@ -478,3 +478,31 @@ class TkTreeView(ttk.Treeview, GetDpiMixIn):
         x_scrollbar.place(x=self.x, y=self.height + self.y,
                           width=self.width, height=super().get_dpi(WIDTH_SCROLLER_BAR))
         self.config(xscrollcommand=x_scrollbar.set)
+
+class TkNotebook(ttk.Notebook, GetDpiMixIn):
+    """
+    自定义Notebook窗口管理，继承ttk.Notebook
+
+    :param args: 位置参数
+    :param kwargs: 关键字参数；
+        master: 父控件；
+        x: x坐标；y: y坐标；
+        width: 宽度；height: 高度；
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """构造函数"""
+
+        self.master = kwargs.get('master', None)
+
+        self.x = super().get_dpi(kwargs.get('x', 0))
+        self.y = super().get_dpi(kwargs.get('y', 0))
+        self.width = super().get_dpi(kwargs.get('width', 100))
+        self.height = super().get_dpi(kwargs.get('height', 50))
+
+        style = ttk.Style()
+        style.configure("TNotebook", padding=[0,0,0,0], background=COLOR_FRAME_BG)
+        style1 = ttk.Style()
+        style1.configure("TNotebook.Tab", padding=[super().get_dpi(10), 0, super().get_dpi(10), 0])
+        super().__init__(master=self.master)
+        self.place(x=self.x, y=self.y, width=self.width, height=self.height)

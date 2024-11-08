@@ -16,7 +16,7 @@ from app import DownloadModel, DownloadView, DownloadCtrl
 
 if __name__ == '__main__':
     # 配置文件路径
-    CONFIG_PATH = ('cfg_download.ini', 'cfg_measure.ini',)
+    CONFIG_PATH = ('cfg_download.ini', 'cfg_a2l.ini',)
     try:
         # 创建view
         download_view = DownloadView()

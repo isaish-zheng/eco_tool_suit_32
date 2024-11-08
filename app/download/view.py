@@ -64,7 +64,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
 
         """
         # root = tk.Tk()
-        self.title("Eco Downloader")
+        self.title("Eco Download")
         # 窗口尺寸和位置
         x_pos = int((self.winfo_screenwidth() -
                      super().get_dpi(WIDTH_ROOT_WINDOW)) / 2)
@@ -112,7 +112,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                            command=lambda: self.presenter.handler_on_show_uds_msg_detail())
 
         # 文件菜单绑定测量按钮
-        file_menu.add_command(label="CCP测量", command=lambda: self.presenter.handler_on_open_measure_ui())
+        file_menu.add_command(label="CCP测量与标定", command=lambda: self.presenter.handler_on_open_measure_ui())
         # 文件菜单绑定退出按钮
         file_menu.add_command(label="复位设备", command=lambda: self.presenter.try_reset_pcan_device())
         # 文件菜单绑定退出按钮
@@ -302,8 +302,9 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                '    Eco Tool Suit V1.1.0\n'
                '    Author: ZYD\n\n'
                '本产品包含: \n'
-               '    Eco Downloader\n'
-               '    Eco Viewer\n')
+               '    Eco Download\n'
+               '    Eco Measure\n'
+               '    Eco Calibrate\n')
         messagebox.showinfo(title='关于', message=msg)
 
     @staticmethod

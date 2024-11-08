@@ -21,7 +21,7 @@ from typing import Any, Union
 
 from crccheck.crc import Crc16Modbus, Crc16Ibm3740
 
-from app.measure.model import MonitorItem
+from app.measure.model import MeasureItem
 from srecord import Srecord
 from utils import pad_hex, get_c_char
 
@@ -657,6 +657,48 @@ class EcoPccpFunc(object):
             # self.__display_uds_msg(confirmation, response, False)
         else:
             msg = f'设置内存操作地址为{pad_hex(hex(addr_base)), 4},偏移{pad_hex(hex(addr_offset)), 1}:{text.decode()}'
+            print_exec_detail(msg)
+            # self.__display_uds_msg(request, None, False)
+            raise EcoPccpException(msg)
+
+        return exec_result
+
+    def download(self,
+                 data: Union[list[int], bytes, bytearray]) -> ExecResult:
+        """
+        下载
+
+        :param data: 要下载的数据
+        :type data: list[int] or bytes or bytearray
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 下载错误
+        """
+        data_length = len(data)
+        data_buffer = ctypes.create_string_buffer(data_length)
+        if data:
+            for i in range(data_length):
+                data_buffer[i] = get_c_char(ord(chr(data[i])))
+
+        mta0_ext = pcanccp.c_ubyte()
+        mta0_addr = pcanccp.c_uint32()
+
+        status = self.obj_pccp.Download(ccp_handle=self.ccp_handle,
+                                        data_buffer=data_buffer,
+                                        size=pcanccp.c_ubyte(data_length),
+                                        mta0_ext=mta0_ext,
+                                        mta0_addr=mta0_addr,
+                                        timeout=self.timeout)
+        _, text = self.obj_pccp.GetErrorText(status)
+        if self.obj_pccp.StatusIsOk(status, pcanccp.TCCP_ERROR_ACKNOWLEDGE_OK):
+            addr = int.to_bytes(mta0_addr.value, 4, 'big', signed=False)
+            addr = int.from_bytes(addr, 'little', signed=False)
+            msg = f'下载:{text.decode()},当前地址为{pad_hex(hex(addr + mta0_ext.value), 4)}'
+            print_msg_detail(msg)
+            exec_result = ExecResult(is_success=True, data=msg)
+            # self.__display_uds_msg(confirmation, response, False)
+        else:
+            msg = f'下载:{text.decode()}'
             print_exec_detail(msg)
             # self.__display_uds_msg(request, None, False)
             raise EcoPccpException(msg)
@@ -1622,7 +1664,7 @@ class Measure(object):
                 self.print_detail(f"pgm_cal_1校验值为{value2}")
                 return value1, value2
             else:
-                msg = f"在pgm文件中未找到地址为{check_addr}的标定区域"
+                msg = f"在pgm文件中未找到地址为{hex(check_addr)}的标定数据区"
                 self.print_detail(msg)
                 raise EcoPccpException(msg)
 
@@ -1797,12 +1839,12 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def start_measure(self, daqs: dict[int, dict[int, list[MonitorItem]]]) -> None:
+    def start_measure(self, daqs: dict[int, dict[int, list[MeasureItem]]]) -> None:
         """
         启动测量流程
 
         :param daqs: daq列表
-        :type daqs: dict[int, dict[int, list[MonitorItem]]]
+        :type daqs: dict[int, dict[int, list[MeasureItem]]]
         """
         try:
             # 若未连接，则返回
@@ -1904,6 +1946,37 @@ class Measure(object):
         # 若已连接，则清空
         if self.has_connected:
             self.obj_pccp.reset()
+
+    def write_ram_cal(self, addr: int, data: Union[list[int], bytes, bytearray]) -> bool | None:
+        """
+        写入ram标定数据
+
+        :param addr: 标定地址
+        :type addr: int
+        :param data: 要标定的数据
+        :type data: list[int] or bytes or bytearray
+        :return: 若执行成功，返回True
+        :rtype: bool or None
+        """
+        try:
+            # 若未连接，则返回
+            if not self.has_connected:
+                return
+            # 终止同步数据传输
+            addr = int.to_bytes(addr, 4, 'big', signed=False)
+            addr = int.from_bytes(addr, 'little', signed=False)
+            self.obj_pccp.set_mta(mta=0,
+                                  addr_offset=0,
+                                  addr_base=addr)
+            exec_result = self.obj_pccp.download(data=data)
+            return exec_result.is_success
+        except Exception as e:
+            # 输出异常信息
+            self.print_detail(f'发生异常 {e}', 'error')
+            self.print_detail(f"{traceback.format_exc()}", 'error')
+
+    def write_rom_cal(self, addr: int, data: Union[list[int], bytes]) -> None:
+        pass
 
     def __deal_comm_para(self) -> tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]:
         """
