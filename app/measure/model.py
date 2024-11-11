@@ -261,6 +261,7 @@ class MeasureModel(object):
         """构造函数"""
         # 持久数据
         self.opened_pgm_filepath = ''  # 存储打开的PGM文件路径
+        self.new_pgm_filepath = '' # 存储标定后的PGM文件路径
         self.opened_a2l_filepath = ''  # 存储打开的A2L文件路径
         self.table_history_filepath: str = 'history.dat'  # 测量标定表格历史数据保存的文件路径
         self.refresh_operate_measure_time_ms = '100'  # 存储测量表格数值刷新时间，默认100ms

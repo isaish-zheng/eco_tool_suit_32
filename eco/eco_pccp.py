@@ -1546,7 +1546,7 @@ class Measure(object):
         """
         print(txt)
 
-    def connect(self, epk_addr: str, epk_len: int) -> str | None:
+    def connect(self, epk_addr: str, epk_len: int) -> tuple[str, bool] | None:
         """
         连接流程
 
@@ -1554,8 +1554,8 @@ class Measure(object):
         :type epk_addr: str
         :param epk_len: 参数epk信息的长度(字节数)
         :type epk_len: int
-        :returns: 若执行成功，返回epk字符串；否则返回None
-        :rtype: str or None
+        :returns: 若执行成功，返回(epk字符串,ecu和pgm标定去是否匹配)；否则返回None
+        :rtype: tuple[str, bool] | None
         """
 
         def _get_epk_from_ecu() -> str:
@@ -1766,7 +1766,7 @@ class Measure(object):
                 self.print_detail('ecu标定数据区与pgm标定数据区不一致', 'error')
             self.has_connected = True  # 置位连接标识
             # 返回epk
-            return ecu_epk
+            return ecu_epk, (ecu_cal_1 == pgm_cal_1 and ecu_cal_2 == pgm_cal_2)
         except Exception as e:
             # 输出异常信息
             self.print_detail(f'发生异常 {e}', 'error')

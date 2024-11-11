@@ -14,7 +14,7 @@ SRecord文件是由Motorola公司定义的一种ASCII文本文件，
 文件扩展名包括：.s19、.s28、.s37、.s、.s1、.s2、.s3、.sx、.srec、.exo、.mot、.mxt，都是同一种格式，
 文件内容没有差异，主要用于记录微控制器、EPROM和其他类型的可编程设备的程序记录。SRecord以一行文本作为一条记录（Record），每行记录的格式如下：
 
-Record_start	Type	Byte_count	Address_Data	CheckSum
+Record_start	Type	Byte_count	Address    Data    CheckSum
 
 Record_start：由字符‘S’表述记录的起始；
 Type：由字符‘0’~‘9’表示本行记录的类型；
@@ -30,6 +30,9 @@ CheckSum：一个字节长度，2个十六进制字符，表示Byte count、Addr
 ##############################
 # Module imports
 ##############################
+import os
+import shutil
+import time
 
 from utils import pad_hex
 from utils import Crc32Bzip2 as Crc32
@@ -183,6 +186,7 @@ class Srecord(object):
         """
         构造函数
         """
+        self.__filepath = filepath # 文件路径
         self.__check_all_sum(filepath)
         (self.__s3_records,
          self.__describe_info,
@@ -192,43 +196,201 @@ class Srecord(object):
                                                                   self.__erase_memory_records)
         self.__crc32_values = self.__get_crc32_values()
 
-    def get_epk(self, epk_addr: str) -> str | None:
+        self.__cal_data: bytes = b'' # 标定区数据序列
+        self.__cal_memory_info: EraseMemoryInfo = None # 标定区数据段信息
+
+    @staticmethod
+    def __checksum(record: str) -> str:
+        """
+        计算一条记录的校验和，
+        长度、地址和数据参与checksum运算，类型、校验和不参与校验，
+        运算公式为：校验和=0xff – (长度 + 地址 + 数据)
+
+        :param record: 一条记录
+        :type record: str
+        :return: 本条记录的校验和(一个字节的16进制序列)
+        :rtype: str
+        """
+        # 去除类型、校验和
+        check_string = record[2:-2]
+        # 将字符串每两个分割之后转换成16进制数字
+        numbers = [int(check_string[i:i + 2], 16) for i in range(0, len(check_string), 2)]
+        # 求 (长度 + 地址 + 数据)的和
+        sum_number = sum(numbers)
+        # 求 校验和=0xff – (长度 + 地址 + 数据) ；转化成字符串之后去掉前面的'0X'字符
+        checksum = hex(0xff - (0xff & sum_number)).upper().replace('0X', '')
+        # 格式化校验和字符串，如果长度大于2取后两位，如果长度小于2在前面补零
+        if len(checksum) < 2:
+            while len(checksum) < 2:
+                checksum = '0' + checksum
+        else:
+            checksum = checksum[-2:]
+        return checksum
+
+    def get_epk(self, addr: str) -> str | None:
         """
         获取epk
 
-        :param epk_addr: epk信息首地址(0x开头的16进制)
-        :type epk_addr: str
+        :param addr: epk信息首地址(0x开头的16进制)
+        :type addr: str
         :return: 若存在返回epk(16进制序列)，否则返回None
         :rtype: str or None
         """
         for erase_memory_info in self.__erase_memory_infos:
-            if int(erase_memory_info.erase_start_address32, 16) == int(epk_addr, 16):
+            if int(erase_memory_info.erase_start_address32, 16) == int(addr, 16):
                 return erase_memory_info.erase_data
 
-    def get_raw_value_from_cal(self, addr: int, offset: int, length: int) -> bytes:
+    def assign_cal_data(self, addr: int) -> bytes:
         """
-        从pgm标定区中获取指定地址和长度的原始值
+        根据首地址指定pgm标定区，并返回其数据序列；
+        指定标定区后方可使用get_raw_data_from_cal_data、flush_cal_data等
 
         :param addr: 标定区域首地址
         :type addr: int
-        :param offset: 相对首地址的偏移地址(0基)
-        :type offset: int
-        :param length: 长度
-        :type length: int
-        :returns: 原始值
-        :rtype: list[int]
+        :returns: 标定区的数据序列
+        :rtype: bytes
+        :raises SrecordException: 不存在指定地址的标定数据区
         """
         for erase_memory_info in self.__erase_memory_infos:
             if int(erase_memory_info.erase_start_address32, 16) == addr:
-                cal_data = bytes.fromhex(erase_memory_info.erase_data)
-                raw_data = cal_data[offset:offset+length]
-                return raw_data
+                self.__cal_data = bytes.fromhex(erase_memory_info.erase_data)
+                self.__cal_memory_info = erase_memory_info
+                return self.__cal_data
         else:
-            msg = f"在Srecord文件中未找到地址为{hex(addr)}的标定数据区"
+            msg = f"在Srecord文件中不存在首地址为{hex(addr)}的标定数据区"
             raise SrecordException(msg)
 
-    @staticmethod
-    def __check_all_sum(filepath: str) -> bool:
+    def get_raw_data_from_cal_data(self, offset: int, length: int) -> bytes:
+        """
+        从pgm标定区中获取指定地址和长度的原始值
+
+        :param offset: 相对标定区首地址的偏移地址(0基)
+        :type offset: int
+        :param length: 长度
+        :type length: int
+        :returns: 原始值数据序列
+        :rtype: bytes
+        :raises SrecordException: 尚未指定标定数据区；参数超出指定标定数据区的范围
+        """
+        if self.__cal_data:
+            if offset < len(self.__cal_data) and offset + length <= len(self.__cal_data):
+                return self.__cal_data[offset:offset+length]
+            else:
+                msg = f"参数超出指定标定数据区的范围"
+                raise SrecordException(msg)
+        else:
+            msg = f"在Srecord文件中尚未指定标定数据区"
+            raise SrecordException(msg)
+
+    def flush_cal_data(self, offset: int, data: bytes) -> None:
+        """
+        刷新标定数据
+
+        :param offset: 相对标定区首地址的偏移地址(0基)
+        :type offset: int
+        :param data: 标定数据序列
+        :type data: bytes
+        """
+        l = [i for i in self.__cal_data]  # bytes转列表
+        l[offset:offset + len(data)] = [i for i in data]  # 修改数据
+        self.__cal_data = bytes(l)  # 列表转bytes
+
+    def creat_cal_file(self, filetype: str) -> str:
+        """
+        根据当前标定数据创建新的标定文件
+
+        :param filetype: 创建的文件类型，'program':完整的程序文件；'calibrate':仅标定区文件
+        :type filetype: str
+        :returns: 新文件的路径
+        :rtype: str
+        :raises SrecordException: 类型尚未支持；标定数据区首地址不一致；标定区行数不一致
+        """
+        def _get_str_time() -> str:
+            """
+            获取当前时间，格式化字符串"%Y-%m-%d %H-%M-%S"
+
+            :return: 当前时间
+            :rtype: str
+            """
+            time_now = time.strftime("%Y-%m-%d %H-%M-%S", time.localtime())  # 时间戳
+            return str(time_now)
+
+        def _get_new_filepath(old_filepath:str, filetype: str) -> str | None:
+            """
+            根据已有文件路径生成新的文件路径。
+            其格式为在原文件名后加上时间戳("%Y-%m-%d %H-%M-%S")
+
+            :param old_filepath: 原文件路径
+            :type old_filepath: str
+            :param filetype: 创建的文件类型，'program':完整的程序文件；'calibrate':仅标定区文件,带'_cal'后缀
+            :type filetype: str
+            :return: 新文件路径
+            :rtype: str or None
+            """
+            if os.path.isfile(old_filepath):
+                file_basename = os.path.basename(old_filepath)
+                file_name, file_extension = os.path.splitext(file_basename)
+                file_path = os.path.dirname(old_filepath)
+                # 对于已经存在指定后缀格式的名称，则重新添加后缀，否则直接添加后缀
+                pos = file_name.find('_pgm')
+                if pos >= 0:
+                    file_name = file_name[:pos]
+                if filetype == 'calibrate':
+                    return ''.join([file_path,'/',file_name,'_cal(',_get_str_time(),')',file_extension])
+                else:
+                    return ''.join([file_path, '/', file_name, '_pgm(', _get_str_time(), ')', file_extension])
+
+        raw_lines = []
+        new_lines = ''
+        raw_file_line_number_start = self.__cal_memory_info.erase_memory_record.begin_record.raw_file_line_number
+        raw_file_line_number_end = self.__cal_memory_info.erase_memory_record.end_record.raw_file_line_number
+        with open(file=self.__filepath, mode='r', encoding='utf-8') as f:
+            raw_lines = f.readlines()  # 读取所有行(0基)
+            raw_line = raw_lines[raw_file_line_number_start - 1]
+            raw_record_type = raw_line[0:2]  # 获取type
+            if raw_record_type != self.srecord_type_dic['data_record_addr32']:
+                msg = f"类型{raw_record_type}尚未支持"
+                raise SrecordException(msg)
+            if int(raw_line[4:12], 16) !=  int(self.__cal_memory_info.erase_start_address32, 16):
+                msg = f"标定区首地址{self.__cal_memory_info.erase_start_address32}与Srecord文件标定区首地址'0x'{raw_line[4:12]}不一致"
+                raise SrecordException(msg)
+            raw_byte_count = raw_line[2:4] # Srecord行中的byte_count
+            raw_checksum = 'FF' # Srecord行中的checksum
+            addr_base = int(self.__cal_memory_info.erase_start_address32, 16) # Srecord文件标定区的基地址
+            data_length = int(raw_byte_count, 16) - 4 - 1 # Srecord行中的数据的长度=byte_count-地址长度4-checksum1
+            new_line_number = 1 # 行号(1基础)
+            for i in range(0, len(self.__cal_data), data_length):
+                raw_addr = int.to_bytes(i + addr_base,
+                                        length=4,
+                                        byteorder='big',
+                                        signed=False).hex().upper()
+                raw_data = self.__cal_data[i:i + data_length].hex().upper()
+                if len(self.__cal_data[i:i + data_length]) == data_length:
+                    bc = raw_byte_count
+                elif len(self.__cal_data[i:i + data_length]) < data_length:
+                    bc = int.to_bytes(len(self.__cal_data[i:i + data_length])+4+1,
+                                      length=1,
+                                      byteorder='big',
+                                      signed=False).hex().upper()
+                new_line = raw_record_type + bc + raw_addr + raw_data + raw_checksum
+                new_line = new_line[:-2] + self.__checksum(new_line) + '\n'
+                new_lines += new_line
+                raw_lines[raw_file_line_number_start - 1 + new_line_number - 1] = new_line
+                new_line_number += 1
+            if new_line_number - 1 != raw_file_line_number_end - raw_file_line_number_start + 1:
+                msg = f"标定区行数{new_line_number - 2}与Srecord文件标定区行数{raw_file_line_number_end -raw_file_line_number_start + 1}不一致"
+                raise SrecordException(msg)
+        # 保存到新文件
+        new_filepath = _get_new_filepath(old_filepath=self.__filepath, filetype=filetype)  # 新文件路径
+        with open(new_filepath, 'w', encoding='utf-8') as f:
+            if filetype == 'calibrate':
+                f.write(new_lines)
+            else:
+                f.write(''.join(raw_lines))
+        # 返回文件路径
+        return new_filepath
+
+    def __check_all_sum(self, filepath: str) -> bool:
         """
         校验Srecord文件各行的checksum
 
@@ -236,42 +398,14 @@ class Srecord(object):
         :rtype: bool
         :raises SrecordException: 某行校验错误
         """
-
-        def checksum(record: str) -> str:
-            """
-            计算一条记录的校验和，
-            长度、地址和数据参与checksum运算，类型、校验和不参与校验，
-            运算公式为：校验和=0xff – (长度 + 地址 + 数据)
-
-            :param record: 一条记录
-            :type record: str
-            :return: 本条记录的校验和(一个字节的16进制序列)
-            :rtype: str
-            """
-            # 去除类型、校验和
-            check_string = record[2:-2]
-            # 将字符串每两个分割之后转换成16进制数字
-            numbers = [int(check_string[i:i + 2], 16) for i in range(0, len(check_string), 2)]
-            # 求 (长度 + 地址 + 数据)的和
-            sum_number = sum(numbers)
-            # 求 校验和=0xff – (长度 + 地址 + 数据) ；转化成字符串之后去掉前面的'0X'字符
-            checksum = hex(0xff - (0xff & sum_number)).upper().replace('0X', '')
-            # 格式化校验和字符串，如果长度大于2取后两位，如果长度小于2在前面补零
-            if len(checksum) < 2:
-                while len(checksum) < 2:
-                    checksum = '0' + checksum
-            else:
-                checksum = checksum[-2:]
-            return checksum
-
         with open(file=filepath, mode='r', encoding='utf-8') as f:
             raw_file_line_number = 0
             for line in f.readlines():
                 line = line.strip()  # 去除该行的换行符
                 raw_file_line_number += 1
-                if line != '' and checksum(line) != line[-2:]:
+                if line != '' and self.__checksum(line) != line[-2:]:
                     f.close()
-                    msg = f'Srecord文件在第{raw_file_line_number}行校验和错误，应为"{checksum(line)}"，实际为"{line[-2:]}"'
+                    msg = f'Srecord文件在第{raw_file_line_number}行校验和错误，应为"{self.__checksum(line)}"，实际为"{line[-2:]}"'
                     raise SrecordException(msg)
         return True
 
@@ -368,8 +502,8 @@ class Srecord(object):
         erase_memory_records.append(erase_memory_record)
         return erase_memory_records
 
-    def __get_erase_memory_infos(self,
-                                 records: list[S3Record],
+    @staticmethod
+    def __get_erase_memory_infos(records: list[S3Record],
                                  erase_memory_records: list[EraseMemoryRecord]) -> list[EraseMemoryInfo]:
         """
         从S3数据记录列表中提取出所有擦写内存区域的首尾行信息
@@ -497,17 +631,18 @@ class Srecord(object):
         return self.__crc32_values
 
 
+
 if __name__ == '__main__':
     pass
-    # filepath = r'C:\Users\XCMGSC\Desktop\CCP程序刷写\0609\xjmain.mot'
+    # filepath = r'C:\Users\XCMGSC\Desktop\pythonProject\eco_tool_suit_32\other\A2L_CCP_测量与标定\main.mot'
     # srecord = Srecord(filepath)
-
+    #
     # for res in srecord.s3records:
     #     print(f'{res.line_number} {res.raw_file_line_number} {res.record_type}', end=" ")
     #     print(f'{res.data_length} {res.start_address32} {res.data}')
-
+    #
     # for res in srecord.erase_memory_infos:
-    #     print(f'区域{res.erase_number}')
+    #     print(f'\n区域{res.erase_number}')
     #     print(f'  首行', end=' ')
     #     print(f'{res.erase_memory_record.begin_record.line_number}', end=' ')
     #     print(f'{res.erase_memory_record.begin_record.raw_file_line_number}', end=' ')
@@ -525,4 +660,4 @@ if __name__ == '__main__':
     #     print(f'  擦除信息', end=' ')
     #     print(f'{res.erase_start_address32}', end=' ')
     #     print(f'{res.erase_length}', end=' ')
-    #     print(f'{res.erase_data}')
+        # print(f'{res.erase_data}')

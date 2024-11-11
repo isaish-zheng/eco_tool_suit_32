@@ -17,6 +17,7 @@ import os
 import pickle
 from struct import unpack, pack  # 数值转换
 
+from tkinter import filedialog
 import traceback  # 用于获取异常详细信息
 from typing import Union
 
@@ -26,10 +27,11 @@ from xba2l.a2l_util import parse_a2l  # 解析a2l文件
 
 from eco import eco_pccp
 from srecord import Srecord
+from tkui.tktypes import FONT_BUTTON
 from utils import singleton, pad_hex
 
 from .model import MeasureModel, SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement
-from .view import tk, ttk, MeasureView, TkTreeView, SubWindowProperty, FONT_LABEL
+from .view import tk, ttk, MeasureView, TkTreeView, SubWindowProperty
 from ..download.model import DownloadModel
 
 
@@ -252,18 +254,26 @@ class MeasureCtrl(object):
                                                      is_selected_check='□')
                     self.model.table_select_calibrate_raw_items.append(table_item)
                 self.model.table_select_calibrate_filter_items = self.model.table_select_calibrate_raw_items
-                msg_a2l = (f"a2l信息 -> {project_name}, V{version}, a2l_epk -> {self.model.a2l_epk}, "
-                           f"文件路径 -> {self.model.opened_a2l_filepath}")
+                msg_a2l = (f"a2l信息 -> {project_name}, V{version}"
+                           f"\n\ta2l_epk -> {self.model.a2l_epk} "
+                           f"\n\t文件路径 -> {self.model.opened_a2l_filepath}")
 
             # 打开程序文件
             if self.model.opened_pgm_filepath:
-                self.model.obj_srecord = Srecord(self.model.opened_pgm_filepath) # 获取程序文件处理对象
-                epk_data = self.model.obj_srecord.get_epk(self.model.a2l_epk_addr) # 获取程序文件epk信息
+                # 获取程序文件处理对象
+                self.model.obj_srecord = Srecord(self.model.opened_pgm_filepath)
+                # 获取程序文件epk信息
+                epk_data = self.model.obj_srecord.get_epk(self.model.a2l_epk_addr)
                 if epk_data:
                     self.model.pgm_epk = bytes.fromhex(epk_data).decode(encoding='utf-8').rstrip('\x00')
-                msg_pgm = (f"程序信息 -> {self.model.obj_srecord.describe_info}, pgm_epk -> {self.model.pgm_epk}, "
-                           f"文件路径 -> {self.model.opened_pgm_filepath}")
-
+                # 获取程序信息
+                msg_pgm = (f"程序信息 -> {self.model.obj_srecord.describe_info}"
+                           f"\n\tpgm_epk -> {self.model.pgm_epk}"
+                           f"\n\t文件路径 -> {self.model.opened_pgm_filepath}")
+                for em in self.model.obj_srecord.erase_memory_infos:
+                    msg_pgm += f"\n\t数据段{em.erase_number}信息 -> 地址:{em.erase_start_address32},长度:{em.erase_length}"
+                # 获取程序中的标定数据
+                self.model.obj_srecord.assign_cal_data(addr=self.model.a2l_memory_rom_cal.address)
             # 打开历史数据
             if os.path.isfile(self.model.table_history_filepath):
                 with open(self.model.table_history_filepath, 'rb') as f:
@@ -271,8 +281,9 @@ class MeasureCtrl(object):
                     self.model.table_measure_items = monitor_data['table_measure_items']
                     self.model.table_calibrate_items = monitor_data['table_calibrate_items']
                     self.model.history_epk = monitor_data['history_epk']
-                    msg_his = (f"历史信息 -> 历史操作数据对象, history_epk -> {self.model.history_epk}, "
-                               f"文件路径 -> {self.model.table_history_filepath}")
+                    msg_his = (f"历史信息 -> 历史操作数据对象"
+                               f"\n\thistory_epk -> {self.model.history_epk}"
+                               f"\n\t文件路径 -> {self.model.table_history_filepath}")
 
             # 显示文件信息
             if msg_a2l:
@@ -318,6 +329,9 @@ class MeasureCtrl(object):
             try:
                 if future and future.exception():
                     raise future.exception()
+                self.handler_on_save_calibrate() # 保存标定数据
+                if os.path.isfile(self.model.new_pgm_filepath):
+                    self.model.opened_pgm_filepath = self.model.new_pgm_filepath # 更新打开的pgm文件路径，以便下次打开最新的文件
                 self.save_config()  # 保存配置
                 self.__pool_recv.shutdown(wait=False)  # 关闭线程池
                 self.__pool.shutdown(wait=False)  # 关闭线程池
@@ -699,13 +713,11 @@ class MeasureCtrl(object):
                     rom_cal_addr = self.model.a2l_memory_rom_cal.address
                     offset = int(self.model.table_calibrate_items[idx_in_table].data_addr, 16) - rom_cal_addr
                     length = self.model.table_calibrate_items[idx_in_table].data_size
-                    raw_data = self.model.obj_srecord.get_raw_value_from_cal(addr=rom_cal_addr,
-                                                                             offset=offset,
-                                                                             length=length)
+                    raw_data = self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                 length=length)
                     value = self.__get_physical_value(item=self.model.table_calibrate_items[idx_in_table],
                                                       raw_data=raw_data)
                     self.model.table_calibrate_items[idx_in_table].value = value
-
                 # 刷新
                 self.__flush_table_operate(target='calibrate')
                 self.__flush_label_operate_number(target='calibrate')
@@ -836,12 +848,15 @@ class MeasureCtrl(object):
                     self.view.btn_stop_measure.config(state='disabled')
                     self.view.btn_open.config(state='disabled')
                 if future.result():
-                    epk = future.result()
+                    epk = future.result()[0]
                     if epk == self.model.a2l_epk and \
                             epk == self.model.pgm_epk:
                         self.text_log(f'pgm、a2l、ecu三方epk匹配成功！', 'done')
                     else:
                         self.text_log(f'pgm、a2l、ecu三方epk匹配失败！', 'done')
+                    is_cal_matched = future.result()[1]
+                    if not is_cal_matched:
+                        self.view.show_warning('ecu标定数据区与pgm标定数据区不一致')
             except Exception as e:
                 self.text_log(f'发生异常 {e}', 'error')
                 self.text_log(f"{traceback.format_exc()}", 'error')
@@ -1051,75 +1066,121 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def __handler_on_change_calibrate_value(self, name: str, value: str) -> None:
-        """
-        停止测量
-
-        :param name: 标定数据项名称
-        :type name: str
-        :param value: 标定值(字符串显示形式)
-        :type value: str
-        """
-
-        def _callback(future):
-            """
-            线程执行结束的回调函数
-
-            :param future: 线程执行结束返回的future对象
-            """
-            try:
-                # 若线程执行中存在异常，则抛出此异常信息
-                if future.exception():
-                    self.view.show_warning('修改失败')
-                    raise Exception(future.exception())
-                if future.result():
-                    self.text_log(f'修改成功', 'done')
-                else:
-                    self.text_log(f'修改失败', 'error')
-            except Exception as e:
-                self.text_log(f'发生异常 {e}', 'error')
-                self.text_log(f"{traceback.format_exc()}", 'error')
-
-        try:
-            self.text_log(f'======修改RAM区标定数据======', 'done')
-            rom_cal_addr = self.model.a2l_memory_rom_cal.address
-            ram_cal_addr = self.model.a2l_memory_ram_cal.address
-            for idx, item in enumerate(self.model.table_calibrate_items):
-                if item.name == name:
-                    break
-            else:
-                self.view.show_warning(f'标定变量{name}未在标定数据对象中找到')
-                return
-            if self.model.table_calibrate_items[idx].cal_type == 'VALUE':
-                addr = ram_cal_addr + int(self.model.table_calibrate_items[idx].data_addr, 16) - rom_cal_addr
-                data = self.__get_raw_data(item=self.model.table_calibrate_items[idx],
-                                           physical_value=value,
-                                           lower_limit=self.model.table_calibrate_items[idx].lower_limit,
-                                           upper_limit=self.model.table_calibrate_items[idx].upper_limit)
-                if not data:
-                    return
-                msg = f"标定变量->{name},物理值->{value},原始值->{data},地址->{hex(addr)},数据类型->{self.model.table_calibrate_items[idx].data_type}"
-                self.text_log(msg)
-                self.__pool.submit(self.model.obj_measure.write_ram_cal, addr, data).add_done_callback(_callback)
-            else:
-                self.view.show_warning('标定变量类型不是VALUE类型')
-        except Exception as e:
-            self.text_log(f'发生异常 {e}', 'error')
-            self.text_log(f"{traceback.format_exc()}", 'error')
-
     def handler_on_table_calibrate_edit(self, e: tk.Event):
         """
-        双击表格更改标定变量的值
+        双击标定表格更改标定变量的值
 
         :param e: 事件
         :type e: tk.Event
         """
-        def _tree_item_edit_done(widget: ttk.Widget, name: str):
-            # 网格布局中移除编辑控件
-            widget.grid_forget()
-            # 为选中单元格设置值
-            self.view.table_calibrate.set(selected_iid, selected_col, edit_var.get())
-            self.__handler_on_change_calibrate_value(name, edit_var.get().strip())
+        def _calibrate(item: CalibrateItem, value: str) -> None:
+            """
+            修改值
+
+            :param item: 标定数据项
+            :type item: CalibrateItem
+            :param value: 标定值(字符串显示形式,对于映射为显示名称)
+            :type value: str
+            """
+            def _callback(future, item: CalibrateItem, value: str, data: bytes):
+                """
+                线程执行结束的回调函数，执行成功则标定数据显示，刷新程序标定区
+
+                :param future: 线程执行结束返回的future对象
+                :type future: concurrent.futures.Future
+                :param item: 标定数据项
+                :type item: CalibrateItem
+                :param value: 标定值(数字字符串显示形式,对于映射则为显示名称)
+                :type value: str
+                :param addr: 标定数据地址(0基)
+                :type addr: int
+                :param data: 标定数据序列(大端)
+                :type data: bytes
+                """
+                try:
+                    # 若线程执行中存在异常，则抛出此异常信息
+                    if future.exception():
+                        self.view.show_warning('修改失败')
+                        raise Exception(future.exception())
+                    if future.result():
+                        self.text_log(f'修改成功', 'done')
+                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                        addr = int(self.model.table_calibrate_items[item.idx_in_table_calibrate_items].data_addr,
+                                   16) - rom_cal_addr
+                        # 更新单元格为标定后的值
+                        item.value = value
+                        self.__flush_table_operate(target='calibrate')
+                        self.model.obj_srecord.flush_cal_data(offset = addr, data = data)
+                    else:
+                        self.text_log(f'修改失败', 'error')
+                except Exception as e:
+                    self.text_log(f'发生异常 {e}', 'error')
+                    self.text_log(f"{traceback.format_exc()}", 'error')
+
+            try:
+                self.text_log(f'======修改RAM区标定数据======', 'done')
+                rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                ram_cal_addr = self.model.a2l_memory_ram_cal.address
+                # 计算标定地址和标定值
+                addr = ram_cal_addr + int(item.data_addr, 16) - rom_cal_addr
+                val, data = self.__get_raw_data(item=item,
+                                                physical_value=value)
+                msg = (f"标定变量->{item.name},"
+                       f"物理值->{val},"
+                       f"原始值->0x{data.hex()},"
+                       f"地址->{hex(addr)},"
+                       f"数据类型->{self.model.table_calibrate_items[idx].data_type}")
+                self.text_log(msg)
+                if val is None or data is None:
+                    return
+                (self.__pool.submit(self.model.obj_measure.write_ram_cal, addr, data).
+                 add_done_callback(lambda f: _callback(f,
+                                                       item=item,
+                                                       value=val,
+                                                       data=data))
+                 )
+            except Exception as e:
+                self.text_log(f'发生异常 {e}', 'error')
+                self.text_log(f"{traceback.format_exc()}", 'error')
+
+        def _validate(widget: ttk.Spinbox | ttk.Combobox, item: CalibrateItem):
+            """
+            验证数据符合规则后，调用标定任务
+
+            :param widget: 编辑控件
+            :type widget: ttk.Spinbox | ttk.Combobox
+            :param item: 标定数据项
+            :type item: CalibrateItem
+            """
+            text = widget.get().strip()
+            lower_limit = item.lower_limit
+            upper_limit = item.upper_limit
+            if isinstance(widget, ttk.Spinbox):
+                # 验证是否为数值
+                try:
+                    float(text)
+                except ValueError:
+                    widget.grid_forget()
+                    msg = f"变量{item.name}的值必须是数字"
+                    self.text_log(msg, 'error')
+                    self.view.show_warning(msg)
+                    return
+                # 格式化
+                fm = item.format
+                if fm:
+                    text = f"{float(text): <{fm[0]}.{fm[1]}f}"
+                # 验证是否在指定范围内
+                if float(text) - upper_limit > 1E-6 or \
+                        float(text) - lower_limit < -1e-6:
+                    widget.grid_forget()
+                    msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
+                    self.text_log(msg, 'error')
+                    self.view.show_warning(msg)
+                    return
+            elif isinstance(widget, ttk.Combobox):
+                pass
+            widget.grid_forget() # 网格布局中移除编辑控件
+            _calibrate(item, text) # 调用标定任务
 
         # 选中数据项为空则退出
         if not self.view.table_calibrate.selection():
@@ -1127,65 +1188,84 @@ class MeasureCtrl(object):
 
         selected_iid = self.view.table_calibrate.selection()[0] # 选中的数据项id
         col_names = self.view.table_calibrate['columns'] # 表列名列表
-        selected_col = '' # 选中的数据项所在列的列名
-        value = '' # 选中的数据项的值
-        name = '' # 选中的数据项的名称
         # 判断鼠标点击事件的位置, 是否在选中数据项的边界内, 如果在, 则获取该列的列名和数据项值，否则退出
         for idx, col_name in enumerate(col_names):
             # 获取选中数据项的边界（相对于控件窗口的坐标），形式为 (x, y, width, height)
             x, y, w, h = self.view.table_calibrate.bbox(selected_iid, col_name)
             if x < e.x < x + w and y < e.y < y + h:
-                selected_col = col_name
-                value = self.view.table_calibrate.item(selected_iid, 'values')[idx]
-                name = self.view.table_calibrate.item(selected_iid, 'values')[col_names.index('Name')]
+                selected_col = col_name # 选中的数据项所在列的列名
+                value = self.view.table_calibrate.item(selected_iid, 'values')[idx] # 选中的数据项的值
                 break
         else:
             return
 
+        # 若不是修改Value列则退出
+        if selected_col != 'Value':
+            return
         # 若未连接设备则退出
         if not (self.model.obj_measure and self.model.obj_measure.has_connected):
-            self.view.show_warning('请先连接设备！')
+            self.view.show_warning('请先连接设备')
             return
 
-        # 创建内容编辑变量，设置内容编辑变量的初始值
-        edit_var = tk.StringVar(value=value.strip())
-
+        # 创建内容编辑变量，设置内容编辑变量的初始值，不能是函数内变量(生命周期不够长)，否则会导致输入框无法显示初始值
+        self.__edit_var = tk.StringVar(value=value.strip())
         # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
-        idx, item = self.__iid2idx_in_table(iid=selected_iid,
+        _, item = self.__iid2idx_in_table(iid=selected_iid,
                                             table_widget=self.view.table_calibrate,
                                             raw_items=self.model.table_calibrate_items)
         # 根据选择的列和数据项属性，进行不同的处理
-        if selected_col == 'Value' and item.cal_type == 'VALUE' and item.conversion_type == 'RAT_FUNC':
+        if item.cal_type == 'VALUE' and item.conversion_type == 'RAT_FUNC':
             # 标量，普通数值
             widget = ttk.Spinbox(self.view.table_calibrate,
-                                 width=w // 8,
-                                 font=FONT_LABEL,
-                                 textvariable=edit_var,
+                                 font=FONT_BUTTON,
+                                 textvariable=self.__edit_var,
                                  from_=item.lower_limit,
-                                 to=item.upper_limit)
-            widget.bind('<FocusOut>', lambda e: _tree_item_edit_done(widget, name))
-        elif selected_col == 'Value' and item.cal_type == 'VALUE' and item.conversion_type == 'TAB_VERB':
+                                 to=item.upper_limit,
+                                 width=w//FONT_BUTTON[1],
+                                 validate='focusout', # 失去焦点时验证数据
+                                 validatecommand=lambda:_validate(widget, item),
+                                 )
+
+        elif item.cal_type == 'VALUE' and item.conversion_type == 'TAB_VERB':
             # 标量，数值映射
             vtab = [] # 数值映射列表，存储名称
-            vtab_dict = {} # 数值映射字典，名称->数值
-            for value in item.compu_vtab:
+            for k, v in item.compu_vtab.items():
                 vtab_dict_key = ''.join(
-                    [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
+                    [v, ':', pad_hex(hex(k), self.model.ASAP2_TYPE_SIZE[item.data_type])])
                 vtab.append(vtab_dict_key)
-                vtab_dict[vtab_dict_key] = value
             widget = ttk.Combobox(self.view.table_calibrate,
-                                  width=w // 8,
-                                  font=FONT_LABEL,
-                                  textvariable=edit_var,
+                                  width=w//FONT_BUTTON[1],
+                                  font=FONT_BUTTON,
+                                  textvariable=self.__edit_var,
                                   state='readonly',
                                   values=vtab)
-            widget.bind('<<ComboboxSelected>>', lambda e: _tree_item_edit_done(widget, name))
-            widget.bind('<FocusOut>', lambda e: _tree_item_edit_done(widget, name))
+            widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
+            widget.bind('<FocusOut>', lambda e: widget.grid_forget())
         else:
+            msg = f"不支持{item.name}的类型,转换类型{item.conversion_type},标定类型{item.cal_type}"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
             return
         # 将widget放到self.table_calibrate的网格布局中, padx和pady分别取选中单元格的x偏移和y偏移
         widget.grid(padx=x, pady=y)
         widget.focus()
+
+    def handler_on_save_calibrate(self) -> None:
+        """
+        保存标定数据
+
+        """
+        try:
+            self.text_log(f'======保存标定数据到下载文件======', 'done')
+            self.model.new_pgm_filepath = self.model.obj_srecord.creat_cal_file(filetype='program')
+            if self.model.new_pgm_filepath:
+                self.text_log(f'保存成功->{self.model.new_pgm_filepath}')
+            else:
+                self.text_log(f'保存失败', 'error')
+                self.view.show_warning('保存失败')
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
 
     def __create_measure_obj(self) -> None:
         """
@@ -1232,7 +1312,7 @@ class MeasureCtrl(object):
         # 输出日志
         self.text_log(f'打开{filetype}文件中...')
         # 打开文件对话框
-        openpath = tk.filedialog.askopenfilename(
+        openpath = filedialog.askopenfilename(
             # 默认扩展名，.号可带可不带
             defaultextension=fileformat,
             # 文件类型选项
@@ -1369,7 +1449,7 @@ class MeasureCtrl(object):
         :type item: MeasureItem | CalibrateItem
         :param raw_data: 原始值字节序列
         :type raw_data: Union[list[int], bytes, bytearray]
-        :return: 物理值(字符串显示形式)
+        :return: 物理值(数字字符串显示形式，映射则为名称)
         :rtype: str
         """
 
@@ -1450,9 +1530,7 @@ class MeasureCtrl(object):
 
     def __get_raw_data(self,
                        item: MeasureItem | CalibrateItem,
-                       physical_value: str,
-                       lower_limit:float,
-                       upper_limit:float) -> bytes | None:
+                       physical_value: str) -> tuple[str | None, bytes | None]:
         """
         根据物理值，求其原始值字节序列;
         raw_value = f(physical_value);
@@ -1460,86 +1538,77 @@ class MeasureCtrl(object):
 
         :param item: 测量/标定数据项
         :type item: MeasureItem | CalibrateItem
-        :param physical_value: 物理值(数字的字符串显示形式)
+        :param physical_value: 物理值(数字的字符串显示形式，对于映射为显示名称)
         :type physical_value: str
-        :param lower_limit: 下限
-        :type lower_limit: float
-        :param upper_limit: 上限
-        :type upper_limit: float
-        :return: 原始值字节序列(大端)
-        :rtype: bytes or None
+        :return: 物理值(数字的字符串显示形式，对于映射则为显示的名称)，原始值字节序列(大端)
+        :rtype: tuple[str | None, bytes | None]
         """
-
-        raw_data = None
-        value = None
-
         # 若是转换类型为映射表
         if (physical_value is not None) and (item.conversion_type == "TAB_VERB"):
             vtab_dict = {v:k for k,v in item.compu_vtab.items()}  # 数值映射字典，名称->数值
             value = vtab_dict[physical_value[0:physical_value.find(':0x')]]
         # 若是转换类型为普通数值
         elif (physical_value is not None) and (item.conversion_type == "RAT_FUNC"):
-            try:
-                float(physical_value)
-            except ValueError:
-                msg = f"变量{item.name}的值必须是数字"
-                self.view.show_warning(msg)
-                self.text_log(msg, 'error')
-                return
-            if eval(physical_value) - upper_limit > 1E-6 or \
-                    eval(physical_value) - lower_limit < -1e-6:
-                msg = f"变量{item.name}的设定值应在范围[{lower_limit},{upper_limit}]内"
-                self.view.show_warning(msg)
-                self.text_log(msg, 'error')
-                return
             # raw_value = f(physical_value);
             # f(x) = B*x + C;
-            physical_value = eval(physical_value)
-            value = physical_value * item.coeffs[1] + item.coeffs[2] # float类型
+            value = float(physical_value) * item.coeffs[1] + item.coeffs[2] # float类型
         else:
             msg = f"无法解析{item.name}的原始值,转换类型{item.conversion_type}"
-            self.view.show_warning(msg)
             self.text_log(msg, 'error')
-            return
+            self.view.show_warning(msg)
+            return None, None
         # 根据不同类型和转换方法求解原始值
         if item.data_type == 'UBYTE':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=False) # 原始值
         elif item.data_type == 'SBYTE':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=True)  # 原始值
         elif item.data_type == 'UWORD':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=False)  # 原始值
         elif item.data_type == 'SWORD':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=True)  # 原始值
         elif item.data_type == 'ULONG':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=False)  # 原始值
         elif item.data_type == 'SLONG':
-            raw_data = int.to_bytes(int(value),
+            value = int(value)
+            raw_data = int.to_bytes(value,
                                     length=self.model.ASAP2_TYPE_SIZE[item.data_type],
                                     byteorder='big',
                                     signed=True)  # 原始值
         elif item.data_type == 'FLOAT32_IEEE':
             raw_data = pack('!f', value)  # 原始值
+            value = self.__get_physical_value(item, raw_data) # 重新计算浮点数
         else:
             msg = f"无法解析{item.name}的原始值,数据类型{item.data_type}"
-            self.view.show_warning(msg)
             self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return None, None
+
+        # 对于转换映射类型，返回数值转为名称
+        if item.conversion_type == "TAB_VERB":
+            value = ''.join(
+                    [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
         # 返回
-        return raw_data
+        return str(value), raw_data
 
     def __get_daqs(self, daqs_cfg: dict[int, dict[str, int]]) -> dict[int, dict[int, list[MeasureItem]]]:
         """
@@ -1835,6 +1904,7 @@ class MeasureCtrl(object):
         :type raw_items: list[SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]
         :return: (index,数据项对象)
         :rtype: tuple[int, SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]
+        :raises TypeError: 不支持raw_items元素的类型
         """
 
         # 查找更改数据项在原始数据项列表中的索引

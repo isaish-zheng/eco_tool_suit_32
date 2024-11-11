@@ -8,8 +8,6 @@
 ##############################
 # Module imports
 ##############################
-
-import srecord
 from typing import Union
 
 
@@ -30,9 +28,9 @@ class Crc32Bzip2(object):
     _xor_output = 0xffffffff;
     _check_result = 0xfc891918.
 
-    :param check_data: 待测数据，整数列表，例如：字符串'123456789'，
+    :param check_data: 待测数据，整数列表，例如：字符串"123456789"，
             转换为整数列表[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39],
-            或b'123456789'
+            或b"123456789"
     :type check_data: Union[List[int], bytes]
     :param poly: 生成项的简写，例如：0x04C11DB7，忽略最高位的"1"，即完整的生成项是0x104C11DB7
     :type poly: int

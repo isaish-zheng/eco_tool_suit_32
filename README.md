@@ -4,22 +4,22 @@
 
 > # 本产品包含以下内容
 > * **Eco Downloader**
-> * **Eco Viewer**
+> * **Eco Measure&Calibrate**
 
 
 > # 功能说明
 > ## Eco Downloader
 > 1. 使用ccp协议下载程序
 > 2. 使用uds协议下载程序
-> ## Eco Viewer
-> 1. 使用ccp协议监视测量对象
+> ## Eco Measure&Calibrate
+> 1. 使用ccp协议进行测量
+> 2. 使用ccp协议进行标定
 
 
 > # 使用说明
 > ## 操作系统
 > **Windows10及以上版本(x86/x64)**
 > ## Python版本(32位)
-> * **Python3.10.11** [Python解释器下载](https://www.python.org/ftp/python/3.10.11/python-3.10.11.exe)
 > * **Python3.11.9** [Python解释器下载](https://www.python.org/ftp/python/3.11.9/python-3.11.9.exe)
 > ## 外部依赖（建议使用项目提供的文件）
 > 1. 安装PCAN驱动程序 [PEAK-System_Driver下载](https://peak-system.com.cn/wp-content/uploads/2024/07/PEAK-System_Driver-Setup-v4.5.0.zip)
@@ -49,11 +49,11 @@
 > 2. 打开程序文件(.mot)
 > 3. 点击下载按钮
 >
-> ### 使用Eco Viewer
-> 1. 点击打开按钮，打开程序文件(.mot)和测量标定文件(.a2l)
-> 2. 在测量对象列表中选中待监视对象后，点击确定按钮添加至监视列表
-> 3. 点击连接按钮连接VCU
-> 4. 连接成功后，可点击启动按钮开始监视
+> ### 使用Eco Measure&Calibrate
+> 1. 点击打开按钮，打开程序文件(.mot)和测量标定文件(.a2l)，连接ECU
+> 2. 若要测量，在测量对象列表中选中测量对象添加至测量窗口，启动测量
+> 3. 若要标定，在标定对象列表中选中标定对象添加至标定窗口，双击修改值到RAM，可手动保存标定数据到下载文件
+> 4. 退出时自动保存测量数据、标定数据，下次打开软件时自动加载
 
 > # 其它
 > * 本产品仅用于学习交流，请勿用于商业用途

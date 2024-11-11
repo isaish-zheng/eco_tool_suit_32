@@ -624,76 +624,78 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
 
         # 设置区域容器
         self.__calibrate_frame = TkFrame(master=self,
-                                       bg=COLOR_FRAME_BG, borderwidth=1,
-                                       x=self.WIDTH_SELECTION_FRAME * 2,
-                                       y=HEIGHT_WINDOW_MENU_BAR+1,
-                                       width=self.WIDTH_SELECTION_FRAME,
-                                       height=self.HEIGHT_SELECTION_FRAME)
+                                         bg=COLOR_FRAME_BG, borderwidth=1,
+                                         x=self.WIDTH_SELECTION_FRAME * 2,
+                                         y=HEIGHT_WINDOW_MENU_BAR + 1,
+                                         width=self.WIDTH_SELECTION_FRAME,
+                                         height=self.HEIGHT_SELECTION_FRAME)
 
         # 设置显示数目标签
         self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
-                                            bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
-                                            text='', font=FONT_BUTTON,
-                                            relief="sunken", justify='left',
-                                            anchor='c', wraplength=WIDTH_LABEL,
-                                            x=self.WIDTH_SELECTION_FRAME - 10 - WIDTH_BUTTON,
-                                            y=0,
-                                            width=WIDTH_BUTTON,
-                                            height=HEIGHT_BUTTON)
+                                              bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
+                                              text='', font=FONT_BUTTON,
+                                              relief="sunken", justify='left',
+                                              anchor='c', wraplength=WIDTH_LABEL,
+                                              x=self.WIDTH_SELECTION_FRAME - 10 - WIDTH_BUTTON,
+                                              y=0,
+                                              width=WIDTH_BUTTON,
+                                              height=HEIGHT_BUTTON)
 
         # 设置连接按钮
-        self.btn_connect_calibrate = TkButton(master=self.__calibrate_frame,
-                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                            activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                            borderwidth=0,
-                                            text="连接", font=FONT_BUTTON,
-                                            command=lambda: self.presenter.handler_on_connect(),
-                                            x=20,
-                                            y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                            width=WIDTH_BUTTON,
-                                            height=HEIGHT_BUTTON,
-                                            state='normal')
+        self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
+                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                           borderwidth=0,
+                                           text="保存", font=FONT_BUTTON,
+                                           command=lambda: self.presenter.handler_on_save_calibrate(),
+                                           x=20,
+                                           y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                           width=WIDTH_BUTTON,
+                                           height=HEIGHT_BUTTON,
+                                           state='normal')
 
         # 设置断开按钮
         self.btn_disconnect_calibrate = TkButton(master=self.__calibrate_frame,
-                                               bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                               activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                               borderwidth=0,
-                                               text="断开", font=FONT_BUTTON,
-                                               command=lambda: self.presenter.handler_on_disconnect(),
-                                               x=110,
-                                               y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                               width=WIDTH_BUTTON,
-                                               height=HEIGHT_BUTTON,
-                                               state='disabled')
+                                                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                                 activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                                 activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                                 borderwidth=0,
+                                                 text="断开", font=FONT_BUTTON,
+                                                 command=lambda: self.presenter.handler_on_disconnect(),
+                                                 x=110,
+                                                 y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                                 width=WIDTH_BUTTON,
+                                                 height=HEIGHT_BUTTON,
+                                                 state='disabled')
 
         # 设置启动测量按钮
         self.btn_start_calibrate = TkButton(master=self.__calibrate_frame,
-                                          bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                          activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                          activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                          borderwidth=0,
-                                          text="启动", font=FONT_BUTTON,
-                                          command=lambda: self.presenter.handler_on_start_measure(),
-                                          x=210,
-                                          y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                          width=WIDTH_BUTTON,
-                                          height=HEIGHT_BUTTON,
-                                          state='disabled')
+                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                            borderwidth=0,
+                                            text="启动", font=FONT_BUTTON,
+                                            command=lambda: self.presenter.handler_on_start_measure(),
+                                            x=210,
+                                            y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                            width=WIDTH_BUTTON,
+                                            height=HEIGHT_BUTTON,
+                                            state='disabled')
 
         # 设置停止测量按钮
         self.btn_stop_calibrate = TkButton(master=self.__calibrate_frame,
-                                         bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                         activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                         activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                         borderwidth=0,
-                                         text="停止", font=FONT_BUTTON,
-                                         command=lambda: self.presenter.handler_on_stop_measure(),
-                                         x=300,
-                                         y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                         width=WIDTH_BUTTON,
-                                         height=HEIGHT_BUTTON,
-                                         state='disabled')
+                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                           borderwidth=0,
+                                           text="停止", font=FONT_BUTTON,
+                                           command=lambda: self.presenter.handler_on_stop_measure(),
+                                           x=300,
+                                           y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                           width=WIDTH_BUTTON,
+                                           height=HEIGHT_BUTTON,
+                                           state='disabled')
 
         # 设置表格风格
         style = ttk.Style()
@@ -733,8 +735,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                )
         table_menu.add_command(label="属性",
                                command=lambda: self.presenter.handler_on_show_property(
-                                   table=self.table_calibrate,target='calibrate'),
+                                   table=self.table_calibrate, target='calibrate'),
                                )
         self.table_calibrate.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
         self.table_calibrate.bind('<Double-1>', lambda e: self.presenter.handler_on_table_calibrate_edit(e))
-
