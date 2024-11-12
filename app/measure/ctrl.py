@@ -257,6 +257,9 @@ class MeasureCtrl(object):
                 msg_a2l = (f"a2l信息 -> {project_name}, V{version}"
                            f"\n\ta2l_epk -> {self.model.a2l_epk} "
                            f"\n\t文件路径 -> {self.model.opened_a2l_filepath}")
+            else:
+                self.text_log('未打开A2L文件', 'warning')
+                return
 
             # 打开程序文件
             if self.model.opened_pgm_filepath:
@@ -274,6 +277,10 @@ class MeasureCtrl(object):
                     msg_pgm += f"\n\t数据段{em.erase_number}信息 -> 地址:{em.erase_start_address32},长度:{em.erase_length}"
                 # 获取程序中的标定数据
                 self.model.obj_srecord.assign_cal_data(addr=self.model.a2l_memory_rom_cal.address)
+            else:
+                self.text_log('未打开程序文件', 'warning')
+                return
+
             # 打开历史数据
             if self.model.table_history_filepath and os.path.isfile(self.model.table_history_filepath):
                 with open(self.model.table_history_filepath, 'rb') as f:
@@ -292,10 +299,11 @@ class MeasureCtrl(object):
                 self.text_log(msg_pgm)
             if msg_his:
                 self.text_log(msg_his)
-            if self.model.pgm_epk == self.model.a2l_epk:
-                self.text_log('a2l、pgm双方epk匹配成功！', 'done')
-            else:
-                self.text_log('a2l、pgm双方epk匹配失败！', 'error')
+            if self.model.a2l_epk and self.model.pgm_epk:
+                if self.model.a2l_epk == self.model.pgm_epk:
+                    self.text_log('a2l、pgm双方epk匹配成功！', 'done')
+                else:
+                    self.text_log('a2l、pgm双方epk匹配失败！', 'error')
 
             # 若history_epk存在且和当前a2l_epk一致，则使用历史数据中的epk
             if self.model.a2l_epk and self.model.a2l_epk == self.model.history_epk:
@@ -373,7 +381,8 @@ class MeasureCtrl(object):
 
         :param table: 待显示属性的数据项所在的表格
         :type table: TkTreeView
-        :param target: 目标，'measure':测量数据，'calibrate':标定数据
+        :param target: 目标，'select_measure':测量选择数据；'measure':测量数据；
+        'select_calibrate':标定选择数据；'calibrate':标定数据
         :type target: str
         """
         try:
@@ -383,15 +392,25 @@ class MeasureCtrl(object):
             column_names = tuple(table["columns"])
             for iid in selected_iids:
                 name = table.item(iid, "values")[column_names.index("Name")]
-                if target == 'measure' and selected_iids:
+                if target == 'select_measure' and selected_iids:
                     names = [item.name for item in self.model.a2l_measurements]
                     SubWindowProperty(master=self.view,
                                       obj=self.model.a2l_measurements[names.index(name)],
+                                      target='measure')
+                if target == 'measure' and selected_iids:
+                    names = [item.name for item in self.model.table_measure_items]
+                    SubWindowProperty(master=self.view,
+                                      obj=self.model.table_measure_items[names.index(name)],
                                       target='measure')
                 if target == 'calibrate' and selected_iids:
                     names = [item.name for item in self.model.table_calibrate_items]
                     SubWindowProperty(master=self.view,
                                       obj=self.model.table_calibrate_items[names.index(name)],
+                                      target='calibrate')
+                if target == 'select_calibrate' and selected_iids:
+                    names = [item.name for item in self.model.a2l_calibrations]
+                    SubWindowProperty(master=self.view,
+                                      obj=self.model.a2l_calibrations[names.index(name)],
                                       target='calibrate')
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
@@ -1256,16 +1275,18 @@ class MeasureCtrl(object):
         widget.grid(padx=x, pady=y)
         widget.focus()
 
-    def handler_on_save_calibrate(self) -> str:
+    def handler_on_save_calibrate(self) -> str | None:
         """
         保存标定数据
 
         :returns: 保存文件的路径
-        :rtype: str
+        :rtype: str | None
         """
         try:
-            self.text_log(f'======保存标定数据到下载文件======', 'done')
+            if not self.model.obj_srecord:
+                return
             if self.model.obj_srecord.is_modify_cal_data():
+                self.text_log(f'======标定数据已修改,保存到下载文件======', 'done')
                 filepath = self.model.obj_srecord.creat_file_from_cal_data(filetype='program')
                 if filepath:
                     self.text_log(f'保存成功->{filepath}')
@@ -1273,8 +1294,6 @@ class MeasureCtrl(object):
                 else:
                     self.text_log(f'保存失败', 'error')
                     self.view.show_warning('保存失败')
-            else:
-                self.text_log(f'标定数据未变化，无需保存', 'warning')
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')

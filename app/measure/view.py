@@ -375,7 +375,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                              activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
         table_menu.add_command(label="属性",
                                command=lambda: self.presenter.handler_on_show_property(
-                                    table=self.table_select_measure, target='measure'),
+                                    table=self.table_select_measure, target='select_measure'),
                                )
         self.table_select_measure.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
 
@@ -620,7 +620,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                              activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
         table_menu.add_command(label="属性",
                                command=lambda: self.presenter.handler_on_show_property(
-                                   table=self.table_select_calibrate, target='calibrate'),
+                                   table=self.table_select_calibrate, target='select_calibrate'),
                                )
         self.table_select_calibrate.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
 
