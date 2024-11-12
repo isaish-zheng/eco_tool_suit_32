@@ -196,8 +196,8 @@ class Srecord(object):
                                                                   self.__erase_memory_records)
         self.__crc32_values = self.__get_crc32_values()
 
-        self.__cal_data: bytes = b'' # 标定区数据序列
-        self.__cal_memory_info: EraseMemoryInfo = None # 标定区数据段信息
+        self.__cal_data: bytes = b'' # 指定PGM标定区数据序列
+        self.__cal_memory_info: EraseMemoryInfo = None # 原PGM标定区数据段信息
 
     @staticmethod
     def __checksum(record: str) -> str:
@@ -235,34 +235,63 @@ class Srecord(object):
         :type addr: str
         :return: 若存在返回epk(16进制序列)，否则返回None
         :rtype: str or None
+        :rtype: bytes
+        :raises SrecordException: 不存在指定地址的epk数据区
         """
         for erase_memory_info in self.__erase_memory_infos:
             if int(erase_memory_info.erase_start_address32, 16) == int(addr, 16):
                 return erase_memory_info.erase_data
+        else:
+            msg = f"在Srecord文件中不存在首地址为{addr}的epk数据区"
+            raise SrecordException(msg)
 
-    def assign_cal_data(self, addr: int) -> bytes:
+    def assign_cal_data(self, addr: int) -> None:
         """
-        根据首地址指定pgm标定区，并返回其数据序列；
-        指定标定区后方可使用get_raw_data_from_cal_data、flush_cal_data等
+        根据首地址指定pgm标定区；
+        指定标定区后方可使用标定区操作方法，如get_raw_data_from_cal_data、flush_cal_data等
 
         :param addr: 标定区域首地址
         :type addr: int
-        :returns: 标定区的数据序列
-        :rtype: bytes
         :raises SrecordException: 不存在指定地址的标定数据区
         """
         for erase_memory_info in self.__erase_memory_infos:
             if int(erase_memory_info.erase_start_address32, 16) == addr:
                 self.__cal_data = bytes.fromhex(erase_memory_info.erase_data)
                 self.__cal_memory_info = erase_memory_info
-                return self.__cal_data
+                break
         else:
             msg = f"在Srecord文件中不存在首地址为{hex(addr)}的标定数据区"
             raise SrecordException(msg)
 
+    def is_modify_cal_data(self) -> bool:
+        """
+        判断是否修改了指定PGM标定区数据
+
+        :returns: 是否修改了指定PGM标定区数据
+        :rtype: bool
+        :raises SrecordException: 尚未指定标定数据区
+        """
+        if not self.__cal_data:
+            msg = f"在Srecord文件中尚未指定标定数据区"
+            raise SrecordException(msg)
+        return self.__cal_memory_info.erase_data.upper() != self.__cal_data.hex().upper()
+
+    def get_cal_data(self) -> tuple[int, int, bytes]:
+        """
+        获取指定PGM标定区数据的首地址、长度及其数据序列
+
+        :returns: 长度(字节), 指定PGM标定区的数据序列
+        :rtype: tuple[int, int, bytes]
+        :raises SrecordException: 尚未指定标定数据区
+        """
+        if not self.__cal_data:
+            msg = f"在Srecord文件中尚未指定标定数据区"
+            raise SrecordException(msg)
+        return int(self.__cal_memory_info.erase_start_address32, 16), len(self.__cal_data), self.__cal_data
+
     def get_raw_data_from_cal_data(self, offset: int, length: int) -> bytes:
         """
-        从pgm标定区中获取指定地址和长度的原始值
+        从指定pgm标定区中获取该地址和长度的原始值
 
         :param offset: 相对标定区首地址的偏移地址(0基)
         :type offset: int
@@ -272,38 +301,44 @@ class Srecord(object):
         :rtype: bytes
         :raises SrecordException: 尚未指定标定数据区；参数超出指定标定数据区的范围
         """
-        if self.__cal_data:
-            if offset < len(self.__cal_data) and offset + length <= len(self.__cal_data):
-                return self.__cal_data[offset:offset+length]
-            else:
-                msg = f"参数超出指定标定数据区的范围"
-                raise SrecordException(msg)
-        else:
+        if not self.__cal_data:
             msg = f"在Srecord文件中尚未指定标定数据区"
             raise SrecordException(msg)
+        if offset >= len(self.__cal_data) or offset + length > len(self.__cal_data):
+            msg = f"参数超出指定标定数据区的范围"
+            raise SrecordException(msg)
+        return self.__cal_data[offset:offset + length]
 
     def flush_cal_data(self, offset: int, data: bytes) -> None:
         """
-        刷新标定数据
+        刷新指定PGM标定区的数据
 
         :param offset: 相对标定区首地址的偏移地址(0基)
         :type offset: int
         :param data: 标定数据序列
         :type data: bytes
+        :rtype: bytes
+        :raises SrecordException: 尚未指定标定数据区；参数超出指定标定数据区的范围
         """
+        if not self.__cal_data:
+            msg = f"在Srecord文件中尚未指定标定数据区"
+            raise SrecordException(msg)
+        if len(data) > len(self.__cal_data):
+            msg = f"数据超出指定标定数据区的长度"
+            raise SrecordException(msg)
         l = [i for i in self.__cal_data]  # bytes转列表
         l[offset:offset + len(data)] = [i for i in data]  # 修改数据
         self.__cal_data = bytes(l)  # 列表转bytes
 
-    def creat_cal_file(self, filetype: str) -> str:
+    def creat_file_from_cal_data(self, filetype: str) -> str:
         """
-        根据当前标定数据创建新的标定文件
+        根据指定PGM标定区数据创建新的文件
 
-        :param filetype: 创建的文件类型，'program':完整的程序文件；'calibrate':仅标定区文件
+        :param filetype: 创建的文件类型，'program':原程序文件修改标定内容后另存；'calibrate':原程序文件提取标定区修改标定内容后另存
         :type filetype: str
-        :returns: 新文件的路径
+        :returns: 另存文件的路径
         :rtype: str
-        :raises SrecordException: 类型尚未支持；标定数据区首地址不一致；标定区行数不一致
+        :raises SrecordException: 尚未指定标定数据区；类型尚未支持；标定数据区首地址不一致；标定区行数不一致
         """
         def _get_str_time() -> str:
             """
@@ -327,7 +362,7 @@ class Srecord(object):
             :return: 新文件路径
             :rtype: str or None
             """
-            if os.path.isfile(old_filepath):
+            if old_filepath and os.path.isfile(old_filepath):
                 file_basename = os.path.basename(old_filepath)
                 file_name, file_extension = os.path.splitext(file_basename)
                 file_path = os.path.dirname(old_filepath)
@@ -340,22 +375,31 @@ class Srecord(object):
                 else:
                     return ''.join([file_path, '/', file_name, '_pgm(', _get_str_time(), ')', file_extension])
 
-        raw_lines = []
-        new_lines = ''
-        raw_file_line_number_start = self.__cal_memory_info.erase_memory_record.begin_record.raw_file_line_number
-        raw_file_line_number_end = self.__cal_memory_info.erase_memory_record.end_record.raw_file_line_number
+        if not self.__cal_data:
+            msg = f"在Srecord文件中尚未指定标定数据区"
+            raise SrecordException(msg)
+
+        raw_lines = [] # 原程序文件的所有行文本列表
+        new_lines = '' # 新程序文件的所有文本
+        raw_file_line_number_start =(
+            self.__cal_memory_info.erase_memory_record.begin_record.raw_file_line_number) # 标定区在原程序文件中的首行
+        raw_file_line_number_end =(
+            self.__cal_memory_info.erase_memory_record.end_record.raw_file_line_number) # 标定区在原程序文件中的尾行
         with open(file=self.__filepath, mode='r', encoding='utf-8') as f:
             raw_lines = f.readlines()  # 读取所有行(0基)
+            # 获取原程序文件中的记录格式
             raw_line = raw_lines[raw_file_line_number_start - 1]
-            raw_record_type = raw_line[0:2]  # 获取type
+            raw_record_type = raw_line[0:2]  # 获取type，如'S3'
             if raw_record_type != self.srecord_type_dic['data_record_addr32']:
-                msg = f"类型{raw_record_type}尚未支持"
+                msg = f"尚未支持类型{raw_record_type}"
                 raise SrecordException(msg)
             if int(raw_line[4:12], 16) !=  int(self.__cal_memory_info.erase_start_address32, 16):
-                msg = f"标定区首地址{self.__cal_memory_info.erase_start_address32}与Srecord文件标定区首地址'0x'{raw_line[4:12]}不一致"
+                msg = (f"标定区首地址{self.__cal_memory_info.erase_start_address32}"
+                       f"与Srecord文件标定区首地址'0x'{raw_line[4:12]}不一致")
                 raise SrecordException(msg)
             raw_byte_count = raw_line[2:4] # Srecord行中的byte_count
             raw_checksum = 'FF' # Srecord行中的checksum
+            # 生成新的标定区内容
             addr_base = int(self.__cal_memory_info.erase_start_address32, 16) # Srecord文件标定区的基地址
             data_length = int(raw_byte_count, 16) - 4 - 1 # Srecord行中的数据的长度=byte_count-地址长度4-checksum1
             new_line_number = 1 # 行号(1基础)
@@ -378,7 +422,8 @@ class Srecord(object):
                 raw_lines[raw_file_line_number_start - 1 + new_line_number - 1] = new_line
                 new_line_number += 1
             if new_line_number - 1 != raw_file_line_number_end - raw_file_line_number_start + 1:
-                msg = f"标定区行数{new_line_number - 2}与Srecord文件标定区行数{raw_file_line_number_end -raw_file_line_number_start + 1}不一致"
+                msg = (f"标定区行数{new_line_number - 2}"
+                       f"与Srecord文件标定区行数{raw_file_line_number_end -raw_file_line_number_start + 1}不一致")
                 raise SrecordException(msg)
         # 保存到新文件
         new_filepath = _get_new_filepath(old_filepath=self.__filepath, filetype=filetype)  # 新文件路径
@@ -629,7 +674,6 @@ class Srecord(object):
         :rtype: list[int]
         """
         return self.__crc32_values
-
 
 
 if __name__ == '__main__':

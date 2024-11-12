@@ -317,15 +317,16 @@ class DownloadCtrl(object):
             # 打开下载文件路径
             self.__open_file(filetype='下载',
                              dir=os.path.dirname(self.model.opened_pgm_filepath))
-            # 打开文件
+            # 打开程序文件
             if self.model.opened_pgm_filepath:
                 obj_srecord = Srecord(self.model.opened_pgm_filepath)
-                # msg = f"下载文件 -> {obj_tkui.opened_pgm_filepath}"
-                # text_log(msg)
-                msg = f"程序信息 -> {obj_srecord.describe_info}, {self.model.opened_pgm_filepath}"
-                self.text_log(msg)
-                msg = f"所有数据段CRC校验结果 -> {[hex(b) for b in obj_srecord.crc32_values]}"
-                self.text_log(msg)
+                # 获取程序信息
+                msg_pgm = (f"程序信息 -> {obj_srecord.describe_info}"
+                           f"\n\t文件路径 -> {self.model.opened_pgm_filepath}")
+                for em in obj_srecord.erase_memory_infos:
+                    msg_pgm += f"\n\t数据段{em.erase_number}信息 -> 地址:{em.erase_start_address32},长度:{em.erase_length}"
+                msg_pgm += f"\n\t所有数据段CRC校验结果 -> {[hex(b) for b in obj_srecord.crc32_values]}"
+                self.text_log(msg_pgm)
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')

@@ -275,7 +275,7 @@ class MeasureCtrl(object):
                 # 获取程序中的标定数据
                 self.model.obj_srecord.assign_cal_data(addr=self.model.a2l_memory_rom_cal.address)
             # 打开历史数据
-            if os.path.isfile(self.model.table_history_filepath):
+            if self.model.table_history_filepath and os.path.isfile(self.model.table_history_filepath):
                 with open(self.model.table_history_filepath, 'rb') as f:
                     monitor_data = pickle.load(f)
                     self.model.table_measure_items = monitor_data['table_measure_items']
@@ -329,9 +329,9 @@ class MeasureCtrl(object):
             try:
                 if future and future.exception():
                     raise future.exception()
-                self.handler_on_save_calibrate() # 保存标定数据
-                if os.path.isfile(self.model.new_pgm_filepath):
-                    self.model.opened_pgm_filepath = self.model.new_pgm_filepath # 更新打开的pgm文件路径，以便下次打开最新的文件
+                filepath = self.handler_on_save_calibrate() # 保存标定数据
+                if filepath:
+                    self.model.opened_pgm_filepath = filepath # 更新打开的pgm文件路径，以便下次打开最新的文件
                 self.save_config()  # 保存配置
                 self.__pool_recv.shutdown(wait=False)  # 关闭线程池
                 self.__pool.shutdown(wait=False)  # 关闭线程池
@@ -713,8 +713,9 @@ class MeasureCtrl(object):
                     rom_cal_addr = self.model.a2l_memory_rom_cal.address
                     offset = int(self.model.table_calibrate_items[idx_in_table].data_addr, 16) - rom_cal_addr
                     length = self.model.table_calibrate_items[idx_in_table].data_size
-                    raw_data = self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
-                                                                                 length=length)
+                    raw_data =(self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                 length=length))
+                    self.model.table_calibrate_items[idx_in_table].data = raw_data
                     value = self.__get_physical_value(item=self.model.table_calibrate_items[idx_in_table],
                                                       raw_data=raw_data)
                     self.model.table_calibrate_items[idx_in_table].value = value
@@ -722,7 +723,6 @@ class MeasureCtrl(object):
                 self.__flush_table_operate(target='calibrate')
                 self.__flush_label_operate_number(target='calibrate')
                 self.handler_on_cancel_select(target='calibrate')
-
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
@@ -802,7 +802,7 @@ class MeasureCtrl(object):
                     self.model.table_measure_items.pop(measure_items_names.index(name))
             # 刷新
             self.handler_on_cancel_select(target='measure')
-            self.handler_on_ack_select(target='measure')
+            self.handler_on_ack_select(target='measure') # 更新表格及表格数据项
         if target == 'all' or target == 'calibrate':
             # 若已启动标定，则不允许删除
             # if hasattr(self.model.obj_measure, 'has_measured') and self.model.obj_measure.has_measured:
@@ -821,7 +821,7 @@ class MeasureCtrl(object):
                     self.model.table_calibrate_items.pop(calibrate_items_names.index(name))
             # 刷新
             self.handler_on_cancel_select(target='calibrate')
-            self.handler_on_ack_select(target='calibrate')
+            self.handler_on_ack_select(target='calibrate') # 更新表格及表格数据项
 
     def handler_on_connect(self) -> None:
         """
@@ -1092,8 +1092,6 @@ class MeasureCtrl(object):
                 :type item: CalibrateItem
                 :param value: 标定值(数字字符串显示形式,对于映射则为显示名称)
                 :type value: str
-                :param addr: 标定数据地址(0基)
-                :type addr: int
                 :param data: 标定数据序列(大端)
                 :type data: bytes
                 """
@@ -1107,12 +1105,13 @@ class MeasureCtrl(object):
                         rom_cal_addr = self.model.a2l_memory_rom_cal.address
                         addr = int(self.model.table_calibrate_items[item.idx_in_table_calibrate_items].data_addr,
                                    16) - rom_cal_addr
-                        # 更新单元格为标定后的值
-                        item.value = value
+                        item.value = value # 更新单元格为标定后的值
+                        item.data = data
                         self.__flush_table_operate(target='calibrate')
-                        self.model.obj_srecord.flush_cal_data(offset = addr, data = data)
+                        self.model.obj_srecord.flush_cal_data(offset = addr, data = data) # 更新PGM对象的标定区
                     else:
                         self.text_log(f'修改失败', 'error')
+                        self.view.show_warning('修改失败')
                 except Exception as e:
                     self.text_log(f'发生异常 {e}', 'error')
                     self.text_log(f"{traceback.format_exc()}", 'error')
@@ -1126,12 +1125,19 @@ class MeasureCtrl(object):
                 val, data = self.__get_raw_data(item=item,
                                                 physical_value=value)
                 msg = (f"标定变量->{item.name},"
-                       f"物理值->{val},"
-                       f"原始值->0x{data.hex()},"
-                       f"地址->{hex(addr)},"
-                       f"数据类型->{self.model.table_calibrate_items[idx].data_type}")
+                       f"\n\t物理值->{item.value},"
+                       f"\n\t原始值->0x{item.data.hex()},"
+                       f"\n\t标定物理值->{val},"
+                       f"\n\t标定原始值->0x{data.hex()},"
+                       f"\n\t地址->{hex(addr)},"
+                       f"\n\t数据类型->{self.model.table_calibrate_items[idx].data_type}")
                 self.text_log(msg)
                 if val is None or data is None:
+                    self.text_log(f'标定值未知', 'error')
+                    self.view.show_warning('标定值未知')
+                    return
+                if item.data == data:
+                    self.text_log(f'标定值未变化，无需修改', 'warning')
                     return
                 (self.__pool.submit(self.model.obj_measure.write_ram_cal, addr, data).
                  add_done_callback(lambda f: _callback(f,
@@ -1155,7 +1161,7 @@ class MeasureCtrl(object):
             text = widget.get().strip()
             lower_limit = item.lower_limit
             upper_limit = item.upper_limit
-            if isinstance(widget, ttk.Spinbox):
+            if isinstance(widget, ttk.Spinbox): # 若控件为数值输入框
                 # 验证是否为数值
                 try:
                     float(text)
@@ -1177,7 +1183,7 @@ class MeasureCtrl(object):
                     self.text_log(msg, 'error')
                     self.view.show_warning(msg)
                     return
-            elif isinstance(widget, ttk.Combobox):
+            elif isinstance(widget, ttk.Combobox): # 若控件为下拉选择框
                 pass
             widget.grid_forget() # 网格布局中移除编辑控件
             _calibrate(item, text) # 调用标定任务
@@ -1221,7 +1227,7 @@ class MeasureCtrl(object):
                                  textvariable=self.__edit_var,
                                  from_=item.lower_limit,
                                  to=item.upper_limit,
-                                 width=w//FONT_BUTTON[1],
+                                 width=w//10,
                                  validate='focusout', # 失去焦点时验证数据
                                  validatecommand=lambda:_validate(widget, item),
                                  )
@@ -1234,7 +1240,7 @@ class MeasureCtrl(object):
                     [v, ':', pad_hex(hex(k), self.model.ASAP2_TYPE_SIZE[item.data_type])])
                 vtab.append(vtab_dict_key)
             widget = ttk.Combobox(self.view.table_calibrate,
-                                  width=w//FONT_BUTTON[1],
+                                  width=w//10,
                                   font=FONT_BUTTON,
                                   textvariable=self.__edit_var,
                                   state='readonly',
@@ -1242,7 +1248,7 @@ class MeasureCtrl(object):
             widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
             widget.bind('<FocusOut>', lambda e: widget.grid_forget())
         else:
-            msg = f"不支持{item.name}的类型,转换类型{item.conversion_type},标定类型{item.cal_type}"
+            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type},转换类型{item.conversion_type})"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
@@ -1250,22 +1256,154 @@ class MeasureCtrl(object):
         widget.grid(padx=x, pady=y)
         widget.focus()
 
-    def handler_on_save_calibrate(self) -> None:
+    def handler_on_save_calibrate(self) -> str:
         """
         保存标定数据
 
+        :returns: 保存文件的路径
+        :rtype: str
         """
         try:
             self.text_log(f'======保存标定数据到下载文件======', 'done')
-            self.model.new_pgm_filepath = self.model.obj_srecord.creat_cal_file(filetype='program')
-            if self.model.new_pgm_filepath:
-                self.text_log(f'保存成功->{self.model.new_pgm_filepath}')
+            if self.model.obj_srecord.is_modify_cal_data():
+                filepath = self.model.obj_srecord.creat_file_from_cal_data(filetype='program')
+                if filepath:
+                    self.text_log(f'保存成功->{filepath}')
+                    return filepath
+                else:
+                    self.text_log(f'保存失败', 'error')
+                    self.view.show_warning('保存失败')
             else:
-                self.text_log(f'保存失败', 'error')
-                self.view.show_warning('保存失败')
+                self.text_log(f'标定数据未变化，无需保存', 'warning')
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
+
+    def handler_on_upload_calibrate(self) -> None:
+        """
+        从RAM上传标定数据到指定PGM标定数据区
+
+        """
+
+        def _callback(future):
+            """
+            线程执行结束的回调函数
+
+            :param future: 线程执行结束返回的future对象
+            """
+            try:
+                # 若线程执行中存在异常，则抛出此异常信息
+                if future.exception():
+                    self.text_log(f'上传失败', 'error')
+                    raise Exception(future.exception())
+                if future.result():
+                    upd_data: bytes = future.result()
+                    if upd_data.hex().upper().endswith('1122334455667788'):
+                        msg = (f"上传成功"
+                               f"\n\t长度 -> {hex(len(upd_data))},"
+                               f"\n\t数据结尾 -> {upd_data[-8:].hex().upper()}")
+                        self.text_log(msg, 'done')
+                        self.model.obj_srecord.flush_cal_data(offset=0,data=upd_data) # 更新指定PGM对象的标定区
+                        self.handler_on_ack_select(target='calibrate') # 更新表格及表格数据项
+                        # 校验ecu_ram中的标定数据区
+                        self.text_log('------校验标定数据区------')
+                        cal_page_addr = self.model.a2l_memory_ram_cal.address # 标定区校验首地址
+                        cal_page_checksum_length = 0x4000  # 标定区校验长度
+                        ecu_cal_1, ecu_cal_2 =(
+                            self.model.obj_measure.check_ecu_ram_cal(cal_page_addr, cal_page_checksum_length))
+                        # 校验pgm中的标定数据区
+                        pgm_cal_1, pgm_cal_2 =(
+                            self.model.obj_measure.check_pgm_cal(self.model.obj_srecord, cal_page_checksum_length))
+                        # 比对校验结果
+                        if ecu_cal_1 == pgm_cal_1 and ecu_cal_2 == pgm_cal_2:
+                            self.text_log('ecu标定数据区与pgm标定数据区一致', 'done')
+                        else:
+                            self.text_log('ecu标定数据区与pgm标定数据区不一致', 'error')
+                            self.view.show_warning('ecu标定数据区与pgm标定数据区不一致')
+                    else:
+                        msg = (f"上传失败，"
+                               f"\n\t数据结尾 -> {upd_data[-8:].hex().upper()}")
+                        self.text_log(msg, 'error')
+                else:
+                    self.text_log(f'上传失败', 'error')
+                self.view.btn_upload_calibrate.config(state='normal')
+            except Exception as e:
+                self.text_log(f'发生异常 {e}', 'error')
+                self.text_log(f"{traceback.format_exc()}", 'error')
+                self.view.btn_upload_calibrate.config(state='normal')
+
+        try:
+            # 若未连接设备则退出
+            if not (self.model.obj_measure and self.model.obj_measure.has_connected):
+                self.view.show_warning('请先连接设备')
+                return
+            # 若未连接设备则退出
+            if self.model.obj_measure.has_measured:
+                self.view.show_warning('请先停止测量')
+                return
+            self.text_log(f'======从RAM上传标定数据======', 'done')
+            addr = self.model.a2l_memory_ram_cal.address
+            _, length, _ = self.model.obj_srecord.get_cal_data()
+            self.__pool.submit(self.model.obj_measure.read_ram_cal, addr, length).add_done_callback(_callback)
+            self.text_log(f'上传中 . . .', 'done')
+            self.view.btn_upload_calibrate.config(state='disabled')
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
+            self.view.btn_upload_calibrate.config(state='normal')
+
+    def handler_on_program_calibrate(self) -> None:
+        """
+        将指定PGM标定数据区刷写至ROM
+
+        """
+
+        def _callback(future):
+            """
+            线程执行结束的回调函数
+
+            :param future: 线程执行结束返回的future对象
+            """
+            try:
+                # 若线程执行中存在异常，则抛出此异常信息
+                if future.exception():
+                    self.text_log(f'刷写失败', 'error')
+                    raise Exception(future.exception())
+                if future.result():
+                    msg = f"刷写成功"
+                    self.text_log(msg, 'done')
+                    self.handler_on_ack_select(target='calibrate')  # 更新表格及表格数据项
+                    self.handler_on_disconnect()
+                    self.handler_on_connect()
+                else:
+                    self.text_log(f'刷写失败', 'error')
+                self.view.btn_program_calibrate.config(state='normal')
+            except Exception as e:
+                self.text_log(f'发生异常 {e}', 'error')
+                self.text_log(f"{traceback.format_exc()}", 'error')
+                self.view.btn_program_calibrate.config(state='normal')
+
+        try:
+            # 若未连接设备则退出
+            if not (self.model.obj_measure and self.model.obj_measure.has_connected):
+                self.view.show_warning('请先连接设备')
+                return
+            # 若未连接设备则退出
+            if self.model.obj_measure.has_measured:
+                self.view.show_warning('请先停止测量')
+                return
+            self.text_log(f'======刷写标定数据至ROM======', 'done')
+            addr_ram = self.model.a2l_memory_ram_cal.address
+            length = self.model.a2l_memory_ram_cal.size
+            addr_rom, _, data = self.model.obj_srecord.get_cal_data()
+            (self.__pool.submit(self.model.obj_measure.write_rom_cal, addr_rom, addr_ram, length, data).
+             add_done_callback(_callback))
+            self.text_log(f'刷写中 . . .', 'done')
+            self.view.btn_program_calibrate.config(state='disabled')
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
+            self.view.btn_program_calibrate.config(state='normal')
 
     def __create_measure_obj(self) -> None:
         """
@@ -1498,7 +1636,7 @@ class MeasureCtrl(object):
             # 如果bytes表示的是大端序，可以使用'!'作为格式字符串的前缀来指定字节顺序。
             raw_value = unpack('!f', bytes(raw_data))[0]
         else:
-            msg = f"无法解析{item.name}的物理值,数据类型{item.data_type}"
+            msg = f"无法解析{item.name}的物理值,尚未支持类型{item.data_type}"
             self.text_log(msg, 'error')
             return value
 
@@ -1509,7 +1647,7 @@ class MeasureCtrl(object):
                 return ''.join(
                     [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
             else:
-                msg = f"无法解析{item.name}的物理值,{raw_value}的转换映射不存在"
+                msg = f"无法解析{item.name}的物理值,{raw_value}的映射不存在"
                 self.text_log(msg, 'error')
                 return value
         # 若是转换类型为普通数值(线性转换)
@@ -1518,7 +1656,7 @@ class MeasureCtrl(object):
             # f(x) = B*x + C;
             value = (raw_value - item.coeffs[2]) / item.coeffs[1]
         else:
-            msg = f"无法解析{item.name}的物理值,转换类型{item.conversion_type}"
+            msg = f"无法解析{item.name}的物理值,尚未支持类型{item.conversion_type}"
             self.text_log(msg, 'error')
             return value
         # 格式化
@@ -1551,9 +1689,9 @@ class MeasureCtrl(object):
         elif (physical_value is not None) and (item.conversion_type == "RAT_FUNC"):
             # raw_value = f(physical_value);
             # f(x) = B*x + C;
-            value = float(physical_value) * item.coeffs[1] + item.coeffs[2] # float类型
+            value = float(physical_value) * item.coeffs[1] + item.coeffs[2] # 线性转换
         else:
-            msg = f"无法解析{item.name}的原始值,转换类型{item.conversion_type}"
+            msg = f"无法解析{item.name}的原始值,尚未支持类型{item.conversion_type}"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return None, None
@@ -1598,12 +1736,12 @@ class MeasureCtrl(object):
             raw_data = pack('!f', value)  # 原始值
             value = self.__get_physical_value(item, raw_data) # 重新计算浮点数
         else:
-            msg = f"无法解析{item.name}的原始值,数据类型{item.data_type}"
+            msg = f"无法解析{item.name}的原始值,尚未支持类型{item.data_type}"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return None, None
 
-        # 对于转换映射类型，返回数值转为名称
+        # 对于转换映射类型，将数值转为名称再返回
         if item.conversion_type == "TAB_VERB":
             value = ''.join(
                     [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
@@ -1922,6 +2060,6 @@ class MeasureCtrl(object):
         elif isinstance(raw_items[0], CalibrateItem):
             table_item = raw_items[idx]
         else:
-            raise TypeError(f'iid2idx不支持类型{type(raw_items[0])}')
+            raise TypeError(f'iid2idx尚未支持类型{type(raw_items[0])}')
         # 返回
         return idx, table_item

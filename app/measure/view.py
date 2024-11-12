@@ -406,6 +406,16 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                             width=WIDTH_BUTTON,
                                             height=HEIGHT_BUTTON)
 
+        label_title = TkLabel(master=self.__measure_frame,
+                              bg=COLOR_FRAME_BG, fg='black', borderwidth=0,
+                              text='测量', font=FONT_BUTTON,
+                              relief="sunken", justify='left',
+                              anchor='c', wraplength=WIDTH_LABEL,
+                              x=(self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON - WIDTH_SCROLLER_BAR) / 2,
+                              y=0,
+                              width=WIDTH_BUTTON,
+                              height=HEIGHT_BUTTON)
+
         # 设置连接按钮
         self.btn_connect_measure = TkButton(master=self.__measure_frame,
                                             bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
@@ -641,19 +651,57 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                               width=WIDTH_BUTTON,
                                               height=HEIGHT_BUTTON)
 
+        label_title = TkLabel(master=self.__calibrate_frame,
+                              bg=COLOR_FRAME_BG, fg='black', borderwidth=0,
+                              text='标定', font=FONT_BUTTON,
+                              relief="sunken", justify='left',
+                              anchor='c', wraplength=WIDTH_LABEL,
+                              x=(self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON - WIDTH_SCROLLER_BAR)/2,
+                              y=0,
+                              width=WIDTH_BUTTON,
+                              height=HEIGHT_BUTTON)
+
         # 设置保存按钮
         self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
                                            borderwidth=0,
-                                           text="保存", font=FONT_BUTTON,
+                                           text="保存至文件", font=FONT_BUTTON,
                                            command=lambda: self.presenter.handler_on_save_calibrate(),
-                                           x=160,
+                                           x=20,
                                            y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
                                            width=WIDTH_BUTTON,
                                            height=HEIGHT_BUTTON,
                                            state='normal')
+
+        # 设置保存按钮
+        self.btn_upload_calibrate = TkButton(master=self.__calibrate_frame,
+                                             bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                             activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                             activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                             borderwidth=0,
+                                             text="从RAM上传", font=FONT_BUTTON,
+                                             command=lambda: self.presenter.handler_on_upload_calibrate(),
+                                             x=210,
+                                             y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                             width=WIDTH_BUTTON,
+                                             height=HEIGHT_BUTTON,
+                                             state='normal')
+
+        # 设置保存按钮
+        self.btn_program_calibrate = TkButton(master=self.__calibrate_frame,
+                                              bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                              activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                              activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                              borderwidth=0,
+                                              text="刷写至ROM", font=FONT_BUTTON,
+                                              command=lambda: self.presenter.handler_on_program_calibrate(),
+                                              x=300,
+                                              y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                              width=WIDTH_BUTTON,
+                                              height=HEIGHT_BUTTON,
+                                              state='normal')
 
         # 设置表格风格
         style = ttk.Style()

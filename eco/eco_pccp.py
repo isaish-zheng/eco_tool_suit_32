@@ -737,6 +737,33 @@ class EcoPccpFunc(object):
 
         return exec_result
 
+    def move(self,
+             size: int) -> ExecResult:
+        """
+        将一块数据从mta0地址迁移到mta1地址
+
+        :param size: 要迁移的数据块长度，单位：字节
+        :type size: int
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 数据块迁移失败
+        """
+        status = self.obj_pccp.Move(ccp_handle=self.ccp_handle,
+                                    size=pcanccp.c_uint32(size),
+                                    timeout=self.timeout)
+        _, text = self.obj_pccp.GetErrorText(status)
+        if self.obj_pccp.StatusIsOk(status, pcanccp.TCCP_ERROR_ACKNOWLEDGE_OK):
+            msg = f'数据块迁移:{text.decode()}'
+            print_msg_detail(msg)
+            exec_result = ExecResult(is_success=True, data=msg)
+            # self.__display_uds_msg(confirmation, response, False)
+        else:
+            msg = f'数据块迁移:{text.decode()}'
+            print_exec_detail(msg)
+            # self.__display_uds_msg(request, None, False)
+            raise EcoPccpException(msg)
+        return exec_result
+
     def select_cal_page(self) -> ExecResult:
         """
         选择标定数据页；
@@ -1077,6 +1104,47 @@ class EcoPccpFunc(object):
             # self.__display_uds_msg(confirmation, response, False)
         else:
             msg = f'编程:{text.decode()}'
+            print_exec_detail(msg)
+            # self.__display_uds_msg(request, None, False)
+            raise EcoPccpException(msg)
+
+        return exec_result
+
+    def program_6(self,
+                  data: Union[list[int], bytes, bytearray]) -> ExecResult:
+        """
+        编程6字节
+
+        :param data: 要编程的数据
+        :type data: list[int] or bytes or bytearray
+        :returns: 执行结果ExecResult
+        :rtype: ExecResult
+        :raises EcoPccpException: 编程错误
+        """
+        data_length = len(data)
+        data_buffer = ctypes.create_string_buffer(data_length)
+        if data:
+            for i in range(data_length):
+                data_buffer[i] = get_c_char(ord(chr(data[i])))
+
+        mta0_ext = pcanccp.c_ubyte()
+        mta0_addr = pcanccp.c_uint32()
+
+        status = self.obj_pccp.Program_6(ccp_handle=self.ccp_handle,
+                                         data_buffer=data_buffer,
+                                         mta0_ext=mta0_ext,
+                                         mta0_addr=mta0_addr,
+                                         timeout=self.timeout)
+        _, text = self.obj_pccp.GetErrorText(status)
+        if self.obj_pccp.StatusIsOk(status, pcanccp.TCCP_ERROR_ACKNOWLEDGE_OK):
+            addr = int.to_bytes(mta0_addr.value, 4, 'big', signed=False)
+            addr = int.from_bytes(addr, 'little', signed=False)
+            msg = f'编程6字节:{text.decode()},当前地址为{pad_hex(hex(addr + mta0_ext.value), 4)}'
+            print_msg_detail(msg)
+            exec_result = ExecResult(is_success=True, data=msg)
+            # self.__display_uds_msg(confirmation, response, False)
+        else:
+            msg = f'编程6字节:{text.decode()}'
             print_exec_detail(msg)
             # self.__display_uds_msg(request, None, False)
             raise EcoPccpException(msg)
@@ -1546,128 +1614,127 @@ class Measure(object):
         """
         print(txt)
 
+    def get_epk_from_ecu(self, epk_addr: str, epk_len: int) -> str:
+        """
+        从ecu获取epk
+
+        :param epk_addr: epk信息的首地址(0x开头的16进制)
+        :type epk_addr: str
+        :param epk_len: epk信息的长度(字节数)
+        :type epk_len: int
+        :returns: epk字符串
+        :rtype: str
+        """
+        epk = []
+        self.print_detail('------从ecu获取epk------')
+        # 设置内存操作地址
+        addr = int.to_bytes(int(epk_addr, 16), 4, 'big', signed=False)
+        addr = int.from_bytes(addr, 'little', signed=False)
+        self.obj_pccp.set_mta(mta=0,
+                              addr_offset=0,
+                              addr_base=addr)
+        upd_sum = epk_len
+        while True:
+            if upd_sum >= 0x5:
+                exec_result = self.obj_pccp.upload(size=0x5)
+                epk.append(exec_result.data)
+                upd_sum -= 0x5
+            else:
+                exec_result = self.obj_pccp.upload(size=upd_sum)
+                epk.append(exec_result.data)
+                break
+        return b''.join(epk).decode('utf-8').rstrip('\x00')
+
+    def check_ecu_ram_cal(self, check_addr: int, check_length: int) -> tuple[str, str]:
+        """
+        校验ecu ram中的标定区，分成两块校验
+
+        :param check_addr: 校验区域首地址
+        :type check_addr: int
+        :param check_length: 每块区域校验长度
+        :type check_length: int
+        :returns: 校验结果，(区域1校验值，区域2校验值)
+        :rtype: tuple[str, str]
+        """
+        # 校验区域1
+        addr = int.to_bytes(check_addr, 4, 'big', signed=False)
+        addr = int.from_bytes(addr, 'little', signed=False)
+        self.obj_pccp.set_mta(mta=0,
+                              addr_offset=0,
+                              addr_base=addr)
+        size = int.to_bytes(check_length, 4, 'big', signed=False)
+        size = int.from_bytes(size, 'little', signed=False)
+        exec_result_1 = self.obj_pccp.build_checksum(block_size=size)
+        self.print_detail(f"ecu_cal_1校验值为{hex(exec_result_1.data)}")
+        # 校验区域2
+        addr = int.to_bytes(check_addr + check_length, 4, 'big', signed=False)
+        addr = int.from_bytes(addr, 'little', signed=False)
+        self.obj_pccp.set_mta(mta=0,
+                              addr_offset=0,
+                              addr_base=addr)
+        size = int.to_bytes(check_length, 4, 'big', signed=False)
+        size = int.from_bytes(size, 'little', signed=False)
+        exec_result_2 = self.obj_pccp.build_checksum(block_size=size)
+        self.print_detail(f"ecu_cal_2校验值为{hex(exec_result_2.data)}")
+        return hex(exec_result_1.data), hex(exec_result_2.data)
+
+    def check_pgm_cal(self, pgm: Srecord, check_length: int) -> tuple[str, str]:
+        """
+        校验pgm中的标定区，分成两块校验
+
+        :param pgm: Srecord程序对象
+        :type pgm: Srecord
+        :param check_length: 每块区域校验长度
+        :type check_length: int
+        :returns: 校验结果，(区域1校验值，区域2校验值)
+        :rtype: tuple[str, str]
+        """
+
+        addr, length, cal_data = pgm.get_cal_data()
+        if addr and length and cal_data:
+            msg = (f"pgm指定标定数据区"
+                   f"\n\t地址 -> {hex(addr)}"
+                   f"\n\t长度 -> {hex(length)}")
+            self.print_detail(msg)
+            # pgm标定区域小于等于校验长度
+            if len(cal_data) <= check_length:
+                # 校验区域1
+                cal_data_1 = cal_data + b'\xff' * (check_length - len(cal_data))
+                cal_value_1 = Crc16Ibm3740.calchex(cal_data_1, byteorder='little')
+                # 校验区域2
+                cal_data_2 = b'\xff' * check_length
+                cal_value_2 = Crc16Ibm3740.calchex(cal_data_2, byteorder='little')
+            # pgm标定区域不大于校验长度
+            else:
+                # 校验区域1
+                cal_data_1 = cal_data[0:check_length]
+                cal_value_1 = Crc16Ibm3740.calchex(cal_data_1, byteorder='little')
+
+                # 校验区域2
+                cal_data_2 = cal_data[check_length:]
+                cal_data_2 += b'\xff' * (check_length - len(cal_data_2))
+                cal_value_2 = Crc16Ibm3740.calchex(cal_data_2, byteorder='little')
+            value1 = '0x' + cal_value_1
+            value2 = '0x' + cal_value_2
+            self.print_detail(f"pgm_cal_1校验值为{value1}")
+            self.print_detail(f"pgm_cal_1校验值为{value2}")
+            return value1, value2
+        else:
+            msg = f"在pgm文件中未返回标定区数据"
+            self.print_detail(msg)
+            raise EcoPccpException(msg)
+
     def connect(self, epk_addr: str, epk_len: int) -> tuple[str, bool] | None:
         """
         连接流程
 
-        :param epk_addr: 参数epk信息的首地址(0x开头的16进制)
+        :param epk_addr: epk信息的首地址(0x开头的16进制)
         :type epk_addr: str
-        :param epk_len: 参数epk信息的长度(字节数)
+        :param epk_len: epk信息的长度(字节数)
         :type epk_len: int
         :returns: 若执行成功，返回(epk字符串,ecu和pgm标定去是否匹配)；否则返回None
         :rtype: tuple[str, bool] | None
         """
-
-        def _get_epk_from_ecu() -> str:
-            """
-            从ecu获取epk
-
-            :returns: epk字符串
-            :rtype: str
-            """
-            epk = []
-            self.print_detail('------从ecu获取epk------')
-            # 设置内存操作地址
-            addr = int.to_bytes(int(epk_addr, 16), 4, 'big', signed=False)
-            addr = int.from_bytes(addr, 'little', signed=False)
-            obj_pccp.set_mta(mta=0,
-                             addr_offset=0,
-                             addr_base=addr)
-            upd_sum = epk_len
-            while True:
-                if upd_sum >= 0x5:
-                    exec_result = obj_pccp.upload(size=0x5)
-                    epk.append(exec_result.data)
-                    upd_sum -= 0x5
-                else:
-                    exec_result = obj_pccp.upload(size=upd_sum)
-                    epk.append(exec_result.data)
-                    break
-            return b''.join(epk).decode('utf-8').rstrip('\x00')
-
-        def _check_ecu_ram_cal(check_addr: int, check_length: int) -> tuple[str, str]:
-            """
-            校验ecu ram中的标定区，分成两块校验
-
-            :param check_addr: 校验区域首地址
-            :type check_addr: int
-            :param check_length: 每块区域校验长度
-            :type check_length: int
-            :returns: 校验结果，(区域1校验值，区域2校验值)
-            :rtype: tuple[str, str]
-            """
-            # 校验区域1
-            addr = int.to_bytes(check_addr, 4, 'big', signed=False)
-            addr = int.from_bytes(addr, 'little', signed=False)
-            obj_pccp.set_mta(mta=0,
-                             addr_offset=0,
-                             addr_base=addr)
-            size = int.to_bytes(check_length, 4, 'big', signed=False)
-            size = int.from_bytes(size, 'little', signed=False)
-            exec_result_1 = obj_pccp.build_checksum(block_size=size)
-            self.print_detail(f"ecu_cal_1校验值为{hex(exec_result_1.data)}")
-            # 校验区域2
-            addr = int.to_bytes(check_addr + check_length, 4, 'big', signed=False)
-            addr = int.from_bytes(addr, 'little', signed=False)
-            obj_pccp.set_mta(mta=0,
-                             addr_offset=0,
-                             addr_base=addr)
-            size = int.to_bytes(check_length, 4, 'big', signed=False)
-            size = int.from_bytes(size, 'little', signed=False)
-            exec_result_2 = obj_pccp.build_checksum(block_size=size)
-            self.print_detail(f"ecu_cal_2校验值为{hex(exec_result_2.data)}")
-            return hex(exec_result_1.data), hex(exec_result_2.data)
-
-        def _check_pgm_cal(pgm: Srecord, check_addr: int, check_length: int) -> tuple[str, str]:
-            """
-            校验pgm中的标定区，分成两块校验
-
-            :param pgm: Srecord程序对象
-            :type pgm: Srecord
-            :param check_addr: 校验区域首地址
-            :type check_addr: int
-            :param check_length: 每块区域校验长度
-            :type check_length: int
-            :returns: 校验结果，(区域1校验值，区域2校验值)
-            :rtype: tuple[str, str]
-            """
-            erase_memory_info = None
-            for erase_memory_info in pgm.erase_memory_infos:
-                if int(erase_memory_info.erase_start_address32, 16) == check_addr:
-                    break
-            if erase_memory_info:
-                msg = (f"在pgm中已找到地址为{erase_memory_info.erase_start_address32}的标定数据区,"
-                       f"已用长度为{erase_memory_info.erase_length}")
-                self.print_detail(msg)
-                cal_data = bytes.fromhex(erase_memory_info.erase_data)
-                # pgm标定区域小于等于校验长度
-                if len(cal_data) <= check_length:
-                    # 校验区域1
-                    cal_data_1 = cal_data + b'\xff' * (check_length - len(cal_data))
-                    cal_value_1 = Crc16Ibm3740.calchex(cal_data_1, byteorder='little')
-                    # 校验区域2
-                    cal_data_2 = b'\xff' * check_length
-                    cal_value_2 = Crc16Ibm3740.calchex(cal_data_2, byteorder='little')
-                # pgm标定区域不大于校验长度
-                else:
-                    # 校验区域1
-                    cal_data_1 = cal_data[0:check_length]
-                    cal_value_1 = Crc16Ibm3740.calchex(cal_data_1, byteorder='little')
-
-                    # 校验区域2
-                    cal_data_2 = cal_data[check_length:]
-                    cal_data_2 += b'\xff' * (check_length - len(cal_data_2))
-                    cal_value_2 = Crc16Ibm3740.calchex(cal_data_2, byteorder='little')
-                value1 = '0x' + cal_value_1
-                value2 = '0x' + cal_value_2
-                self.print_detail(f"pgm_cal_1校验值为{value1}")
-                self.print_detail(f"pgm_cal_1校验值为{value2}")
-                return value1, value2
-            else:
-                msg = f"在pgm文件中未找到地址为{hex(check_addr)}的标定数据区"
-                self.print_detail(msg)
-                raise EcoPccpException(msg)
-
         try:
             # 若已连接，则返回
             if self.has_connected:
@@ -1736,7 +1803,7 @@ class Measure(object):
             obj_pccp.get_active_cal_page()
 
             # 获取ecu的epk
-            ecu_epk = _get_epk_from_ecu()
+            ecu_epk = self.get_epk_from_ecu(epk_addr=epk_addr, epk_len=epk_len)
             self.print_detail(f'ecu_epk为{ecu_epk}')
             # 获取激活的标定页
             self.print_detail('------获取激活的标定页------')
@@ -1751,14 +1818,12 @@ class Measure(object):
                              addr_base=addr)
             obj_pccp.select_cal_page()
 
-            # 校验ecu ram中的标定数据区
+            # 校验ecu_ram中的标定数据区
             self.print_detail('------校验标定数据区------')
             cal_page_checksum_length = 0x4000  # 标定区校验长度
-            ecu_cal_1, ecu_cal_2 = _check_ecu_ram_cal(cal_page_addr, cal_page_checksum_length)
-
+            ecu_cal_1, ecu_cal_2 = self.check_ecu_ram_cal(cal_page_addr, cal_page_checksum_length)
             # 校验pgm中的标定数据区
-            pgm_cal_1, pgm_cal_2 = _check_pgm_cal(self.__obj_srecord, 0x00fd0000, cal_page_checksum_length)
-
+            pgm_cal_1, pgm_cal_2 = self.check_pgm_cal(self.__obj_srecord, cal_page_checksum_length)
             # 比对校验结果
             if ecu_cal_1 == pgm_cal_1 and ecu_cal_2 == pgm_cal_2:
                 self.print_detail('ecu标定数据区与pgm标定数据区一致', 'done')
@@ -1949,7 +2014,7 @@ class Measure(object):
 
     def write_ram_cal(self, addr: int, data: Union[list[int], bytes, bytearray]) -> bool | None:
         """
-        写入ram标定数据
+        写入ram标定数据，最多5字节
 
         :param addr: 标定地址
         :type addr: int
@@ -1962,7 +2027,6 @@ class Measure(object):
             # 若未连接，则返回
             if not self.has_connected:
                 return
-            # 终止同步数据传输
             addr = int.to_bytes(addr, 4, 'big', signed=False)
             addr = int.from_bytes(addr, 'little', signed=False)
             self.obj_pccp.set_mta(mta=0,
@@ -1975,8 +2039,110 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def write_rom_cal(self, addr: int, data: Union[list[int], bytes]) -> None:
-        pass
+    def read_ram_cal(self, addr: int, length: int) -> bytes | None:
+        """
+        读取ram标定数据
+
+        :param addr: 标定地址
+        :type addr: int
+        :param length: 长度
+        :type length: int
+        :return: 若执行成功，返回数据序列
+        :rtype: bytes or None
+        """
+        try:
+            # 若未连接，则返回
+            if not self.has_connected:
+                return
+
+            upd_data = []
+            # 设置内存操作地址
+            addr = int.to_bytes(addr, 4, 'big', signed=False)
+            addr = int.from_bytes(addr, 'little', signed=False)
+            self.obj_pccp.set_mta(mta=0,
+                             addr_offset=0,
+                             addr_base=addr)
+            upd_sum = length
+            while True:
+                if upd_sum >= 0x5:
+                    exec_result = self.obj_pccp.upload(size=0x5)
+                    upd_data.append(exec_result.data)
+                    upd_sum -= 0x5
+                else:
+                    exec_result = self.obj_pccp.upload(size=upd_sum)
+                    upd_data.append(exec_result.data)
+                    break
+            return b''.join(upd_data)
+        except Exception as e:
+            # 输出异常信息
+            self.print_detail(f'发生异常 {e}', 'error')
+            self.print_detail(f"{traceback.format_exc()}", 'error')
+
+    def write_rom_cal(self, addr_rom: int, addr_ram: int, length: int, data: bytes) -> bool | None:
+        """
+        写入rom标定数据后，复制到ram区
+
+        :param addr_rom: rom地址
+        :type addr_rom: int
+        :param addr_ram: ram地址
+        :type addr_ram: int
+        :param length: 标定区总长度
+        :type length: int
+        :param data: 数据序列
+        :type data: bytes
+        :return: 若执行成功，返回True
+        :rtype: bool or None
+        """
+        try:
+            # 末尾补'\xff'，否则最后4个字节的有效数据会写失败
+            cal_data = data + b'\xff' * 4
+            block_size = len(cal_data)
+            # 若超出标定区总长度，则退出
+            if block_size > length:
+                msg = f'标定数据区长度{hex(block_size)}超出总长度{hex(length)}'
+                self.print_detail(msg, 'error')
+                return
+
+            # 设置rom内存操作地址
+            addr_rom = int.to_bytes(addr_rom, 4, 'big', signed=False)
+            addr_rom = int.from_bytes(addr_rom, 'little', signed=False)
+            ecec_result = self.obj_pccp.set_mta(mta=0,
+                                                addr_offset=0,
+                                                addr_base=addr_rom)
+            # 擦除内存
+            memory_size = int.to_bytes(length, 4, 'big', signed=False)
+            memory_size = int.from_bytes(memory_size, 'little', signed=False)
+            ecec_result = self.obj_pccp.clear_memory(memory_size=memory_size)
+            #编程
+            pgm_sum = block_size
+            while True:
+                if pgm_sum >= 0x6:
+                    pgm_data = cal_data[block_size-pgm_sum:block_size-pgm_sum+6]
+                    ecec_result = self.obj_pccp.program_6(data=pgm_data)
+                    pgm_sum -= 0x6
+                elif pgm_sum >= 0x0:
+                    pgm_data = cal_data[block_size - pgm_sum:]
+                    ecec_result = self.obj_pccp.program(data=pgm_data)
+                    break
+            # 编程完所有数据段最后再发送数据全0的编程帧，否则最后一个数据段校验结果不正确
+            ecec_result = self.obj_pccp.program(data=[])
+            # 设置rom内存操作地址
+            ecec_result = self.obj_pccp.set_mta(mta=0,
+                                                addr_offset=0,
+                                                addr_base=addr_rom)
+            # 设置ram内存操作地址
+            addr_ram = int.to_bytes(addr_ram, 4, 'big', signed=False)
+            addr_ram = int.from_bytes(addr_ram, 'little', signed=False)
+            ecec_result = self.obj_pccp.set_mta(mta=1,
+                                                addr_offset=0,
+                                                addr_base=addr_ram)
+            # 从ROM迁移数据块到RAM
+            ecec_result = self.obj_pccp.move(size=memory_size)
+            return ecec_result.is_success
+        except Exception as e:
+            # 输出异常信息
+            self.print_detail(f'发生异常 {e}', 'error')
+            self.print_detail(f"{traceback.format_exc()}", 'error')
 
     def __deal_comm_para(self) -> tuple[pcanccp.c_ushort, pcanccp.c_ushort, int, int, int]:
         """

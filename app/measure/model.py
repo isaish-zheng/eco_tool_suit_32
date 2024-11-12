@@ -206,6 +206,8 @@ class CalibrateItem(object):
     :type lower_limit: float
     :param upper_limit: 物理值上限
     :type upper_limit: float
+    :param data: value字段的原始数据序列
+    :type data: bytes
 
     :param cal_type: 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
     :type cal_type: str
@@ -231,6 +233,7 @@ class CalibrateItem(object):
     data_addr: str = ''  # 数据地址
     lower_limit: float = None  # 物理值下限
     upper_limit: float = None  # 物理值上限
+    data: bytes = b''  # value字段的原始数据序列
 
     cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
     record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
@@ -254,14 +257,13 @@ class MeasureModel(object):
         'ULONG': 4,
         'SLONG': 4,
         'FLOAT32_IEEE': 4,
-        'FLOAT64_IEEE': 8 # 不支持，此类型数据会被过滤掉
+        'FLOAT64_IEEE': 8 # 不支持，测量时此类型数据会被过滤掉
     }
 
     def __init__(self):
         """构造函数"""
         # 持久数据
         self.opened_pgm_filepath = ''  # 存储打开的PGM文件路径
-        self.new_pgm_filepath = '' # 存储标定后的PGM文件路径
         self.opened_a2l_filepath = ''  # 存储打开的A2L文件路径
         self.table_history_filepath: str = 'history.dat'  # 测量标定表格历史数据保存的文件路径
         self.refresh_operate_measure_time_ms = '100'  # 存储测量表格数值刷新时间，默认100ms
