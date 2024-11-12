@@ -172,7 +172,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         """构造函数"""
         # 操作系统使用程序自身的dpi适配
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        super().__init__(master=master)
+        super().__init__(master=master, bg=COLOR_FRAME_BG)
 
         self.set_root()
         # 子窗口捕捉所有事件
@@ -360,10 +360,10 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                        lambda e: self.presenter.handler_on_select_item(e, target='measure'))
         # 设置表头
         self.table_select_measure["columns"] = ("is_selected", "Name", "20ms", "100ms")
-        self.table_select_measure.column("is_selected", anchor='c', width=super().get_dpi(10), )  # 表示列,不显示
-        self.table_select_measure.column("Name", anchor='w', width=super().get_dpi(200))
-        self.table_select_measure.column("20ms", anchor='c', width=super().get_dpi(10))
-        self.table_select_measure.column("100ms", anchor='c', width=super().get_dpi(10))
+        self.table_select_measure.column("is_selected", anchor='c', width=super().get_dpi(15), )  # 表示列,不显示
+        self.table_select_measure.column("Name", anchor='w', width=super().get_dpi(275))
+        self.table_select_measure.column("20ms", anchor='c', width=super().get_dpi(45))
+        self.table_select_measure.column("100ms", anchor='c', width=super().get_dpi(45))
         # self.table_select_measure.heading("is_selected", anchor='w', text="is_selected")  # 显示表头
         self.table_select_measure.heading("Name", anchor='w', text="Name")
         self.table_select_measure.heading("20ms", anchor='w', text="20ms")
@@ -492,10 +492,10 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         #                         lambda e: _pop_menu(e))
         # 设置表头
         self.table_measure["columns"] = ("Name", "Value", "Rate", "Unit")
-        self.table_measure.column("Name", anchor='w', width=super().get_dpi(200))  # 表示列,不显示
-        self.table_measure.column("Value", anchor='w', width=super().get_dpi(10))
-        self.table_measure.column("Rate", anchor='w', width=super().get_dpi(10))
-        self.table_measure.column("Unit", anchor='w', width=super().get_dpi(10))
+        self.table_measure.column("Name", anchor='w', width=super().get_dpi(210))  # 表示列,不显示
+        self.table_measure.column("Value", anchor='w', width=super().get_dpi(95))
+        self.table_measure.column("Rate", anchor='w', width=super().get_dpi(45))
+        self.table_measure.column("Unit", anchor='w', width=super().get_dpi(29))
         self.table_measure.heading("Name", anchor='w', text="Name")  # 显示表头
         self.table_measure.heading("Value", anchor='w', text="Value")
         self.table_measure.heading("Rate", anchor='w', text="Rate")
@@ -607,9 +607,9 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                          lambda e: self.presenter.handler_on_select_item(e, target='calibrate'))
         # 设置表头
         self.table_select_calibrate["columns"] = ("is_selected", "Name", "Check")
-        self.table_select_calibrate.column("is_selected", anchor='c', width=super().get_dpi(10))  # 表示列,不显示
-        self.table_select_calibrate.column("Name", anchor='w', width=super().get_dpi(210))
-        self.table_select_calibrate.column("Check", anchor='c', width=super().get_dpi(10))
+        self.table_select_calibrate.column("is_selected", anchor='c', width=super().get_dpi(15))  # 表示列,不显示
+        self.table_select_calibrate.column("Name", anchor='w', width=super().get_dpi(325))
+        self.table_select_calibrate.column("Check", anchor='c', width=super().get_dpi(40))
         # self.table_select_calibrate.heading("is_selected", anchor='w', text="is_selected")  # 显示表头
         self.table_select_calibrate.heading("Name", anchor='w', text="Name")
         self.table_select_calibrate.heading("Check", anchor='w', text="Check")
@@ -725,9 +725,9 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         #                         lambda e: _pop_menu(e))
         # 设置表头
         self.table_calibrate["columns"] = ("Name", "Value", "Unit")
-        self.table_calibrate.column("Name", anchor='w', width=super().get_dpi(200))  # 表示列,不显示
-        self.table_calibrate.column("Value", anchor='w', width=super().get_dpi(20))
-        self.table_calibrate.column("Unit", anchor='w', width=super().get_dpi(10))
+        self.table_calibrate.column("Name", anchor='w', width=super().get_dpi(255))  # 表示列,不显示
+        self.table_calibrate.column("Value", anchor='w', width=super().get_dpi(95))
+        self.table_calibrate.column("Unit", anchor='w', width=super().get_dpi(29))
         self.table_calibrate.heading("Name", anchor='w', text="Name")  # 显示表头
         self.table_calibrate.heading("Value", anchor='w', text="Value")
         self.table_calibrate.heading("Unit", anchor='w', text="Unit")
