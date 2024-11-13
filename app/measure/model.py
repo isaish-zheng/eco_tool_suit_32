@@ -12,7 +12,7 @@ from queue import Queue
 from tkinter import StringVar
 from dataclasses import dataclass
 
-from xba2l.a2l_lib import Module, MemorySegment, Measurement, CompuMethod, CompuVtab, Characteristic, RecordLayout
+from xba2l.a2l_lib import Module, MemorySegment, Measurement, CompuMethod, CompuVtab, Characteristic, RecordLayout, AxisPts
 
 from eco import eco_pccp
 from srecord import Srecord
@@ -237,6 +237,7 @@ class CalibrateItem(object):
 
     cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
     record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
+    axis_refs: tuple[str] = () # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
 
 
 ##############################
@@ -292,6 +293,7 @@ class MeasureModel(object):
         self.a2l_conversions: list[CompuMethod] = []  # 存储A2L文件解析后的转换方法列表
         self.a2l_compu_vtabs: list[CompuVtab] = []  # 存储A2L文件解析后的转换映射列表
         self.a2l_record_layouts: list[RecordLayout] = []  # 存储A2L文件解析后的标定变量存储结构
+        self.a2l_axis_pts_dict: dict[str, list[AxisPts]] = {}  # 存储A2L文件解析后的标定变量的轴类型，被一维表、二维表等引用
 
         # 下面列表中元素实际指向的内容是相同的，即filter_items由raw_items经浅拷贝得到
         self.table_select_measure_raw_items: list[SelectMeasureItem] = []  # 存储测量选择数据项表格所有的数据项内容

@@ -109,7 +109,7 @@ class PropertyTipBox(GetDpiMixIn):
 
 class SubWindowProperty(tk.Toplevel, GetDpiMixIn):
     """
-    测量标定视图，子窗口
+    属性子窗口
 
     :param master: 父窗口
     :type master: tk.Toplevel
@@ -234,6 +234,138 @@ class SubWindowProperty(tk.Toplevel, GetDpiMixIn):
                                            values=(attribute, getattr(self.obj, attribute)),
                                            tags=['tag_1',],
                                            )
+
+
+class SubCurveCalibrate(tk.Toplevel, GetDpiMixIn):
+    """
+    一维数据标定窗口
+
+    :param master: 父窗口
+    :type master: tk.Toplevel
+    :param obj: 待标定的对象
+    :type obj: Any
+    """
+
+    WIDTH_ROOT_WINDOW = 400
+    HEIGHT_ROOT_WINDOW = 600
+
+    WIDTH_FRAME = 400
+    HEIGHT_FRAME = 600
+
+    WIDTH_SELECTION_FRAME = 400
+    HEIGHT_SELECTION_FRAME = 600
+
+    def __init__(self,
+                 master: tk.Toplevel,
+                 obj:Any,
+                 ) -> None:
+        """构造函数"""
+        # 操作系统使用程序自身的dpi适配
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        super().__init__(master=master)
+
+        self.obj = obj
+        self.set_root()
+        # 子窗口捕捉所有事件
+        # self.grab_set()
+        self.transient(master)
+
+        self.set_calibrate_frame()
+
+    def set_root(self) -> None:
+        """
+        设置根窗口
+
+        :param target: 目标，'measure':测量数据，'calibrate':标定数据
+        :type target: str
+        """
+        # root = tk.Tk()
+        self.title(self.obj.name)
+        # 窗口尺寸和位置
+        x_pos = int((self.winfo_screenwidth() -
+                     super().get_dpi(self.WIDTH_ROOT_WINDOW)) / 2)
+        y_pos = int((self.winfo_screenheight() -
+                     super().get_dpi(self.HEIGHT_ROOT_WINDOW)) / 2)
+        self.geometry(
+            f"{super().get_dpi(self.WIDTH_ROOT_WINDOW)}x"
+            f"{super().get_dpi(self.HEIGHT_ROOT_WINDOW)}"
+            f"+{x_pos}+{y_pos}")
+        self.resizable(width=False, height=False)
+        # root.overrideredirect(True)  # 去除标题栏
+        with open('tmp.ico', 'wb') as tmp:
+            tmp.write(base64.b64decode(icon.img))
+        self.iconbitmap('tmp.ico')
+        os.remove('tmp.ico')
+
+    def set_calibrate_frame(self):
+        """
+        设置标定数据项界面
+
+        :param model: 视图的数据模型
+        :type model: MeasureModel
+        """
+
+        # 设置区域容器
+        self.__calibrate_frame = TkFrame(master=self,
+                                         bg='red', borderwidth=1,
+                                         x=0,
+                                         y=0,
+                                         width=self.WIDTH_SELECTION_FRAME,
+                                         height=self.HEIGHT_SELECTION_FRAME)
+
+        # 设置显示数目标签
+        # self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
+        #                                       bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
+        #                                       text='', font=FONT_BUTTON,
+        #                                       relief="sunken", justify='left',
+        #                                       anchor='c', wraplength=WIDTH_LABEL,
+        #                                       x=self.WIDTH_SELECTION_FRAME - 10 - WIDTH_BUTTON,
+        #                                       y=0,
+        #                                       width=WIDTH_BUTTON,
+        #                                       height=HEIGHT_BUTTON)
+
+        # 设置表格风格
+        style = ttk.Style()
+        style.configure("Custom.Treeview",
+                        font=FONT_BUTTON,
+                        rowheight=super().get_dpi(18), )
+        # 设置表格
+        self.table_calibrate = TkTreeView(master=self.__calibrate_frame,
+                                          show="headings",
+                                          selectmode="extended",
+                                          style="Custom.Treeview",
+                                          x=0,
+                                          y=HEIGHT_ENTRY * 2 - WIDTH_SCROLLER_BAR,
+                                          width=self.WIDTH_SELECTION_FRAME - WIDTH_SCROLLER_BAR,
+                                          height=self.HEIGHT_SELECTION_FRAME - HEIGHT_ENTRY * 4 + WIDTH_SCROLLER_BAR - 30)
+        # self.table_calibrate.column("#0", width=420, minwidth=100)
+        # 设置滚动条
+        self.table_calibrate.create_scrollbar()
+        # 绑定数据项选择事件
+        # self.table_calibrate.bind("<<TreeviewSelect>>",
+        #                         lambda e: _pop_menu(e))
+        # 设置表头
+        self.table_calibrate["columns"] = ("Num", "X", "Y")
+        self.table_calibrate.column("Num", anchor='w', width=super().get_dpi(100))  # 表示列,不显示
+        self.table_calibrate.column("X", anchor='w', width=super().get_dpi(140))
+        self.table_calibrate.column("Y", anchor='w', width=super().get_dpi(140))
+        self.table_calibrate.heading("Num", anchor='w', text="Num")  # 显示表头
+        self.table_calibrate.heading("X", anchor='w', text="X")
+        self.table_calibrate.heading("Y", anchor='w', text="Y")
+
+        # 鼠标右键菜单
+        # table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
+        #                      bg=COLOR_FRAME_BG, fg='black',
+        #                      activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
+        # table_menu.add_command(label="删除",
+        #                        command=lambda: self.presenter.handler_on_delete_item(target='calibrate'),
+        #                        )
+        # table_menu.add_command(label="属性",
+        #                        command=lambda: self.presenter.handler_on_show_property(
+        #                            table=self.table_calibrate, target='calibrate'),
+        #                        )
+        # self.table_calibrate.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
+        # self.table_calibrate.bind('<Double-1>', lambda e: self.presenter.handler_on_table_calibrate_edit(e))
 
 
 # @singleton

@@ -15,6 +15,7 @@ import copy  # 拷贝可变类型
 from itertools import groupby  # 分组
 import os
 import pickle
+from pprint import pprint
 from struct import unpack, pack  # 数值转换
 
 from tkinter import filedialog
@@ -23,6 +24,7 @@ from typing import Union
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from xba2l.a2l_base import Options as OptionsParseA2l  # 解析a2l文件
+from xba2l.a2l_lib import AxisPts
 from xba2l.a2l_util import parse_a2l  # 解析a2l文件
 
 from eco import eco_pccp
@@ -31,7 +33,7 @@ from tkui.tktypes import FONT_BUTTON
 from utils import singleton, pad_hex
 
 from .model import MeasureModel, SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement
-from .view import tk, ttk, MeasureView, TkTreeView, SubWindowProperty
+from .view import tk, ttk, MeasureView, TkTreeView, SubWindowProperty, SubCurveCalibrate
 from ..download.model import DownloadModel
 
 
@@ -240,6 +242,8 @@ class MeasureCtrl(object):
                 record_layouts = copy.deepcopy(module.record_layouts)
                 record_layouts.sort(key=lambda item: item.name)
                 self.model.a2l_record_layouts = record_layouts
+                # 获取a2l标定变量的轴类型，保存到视图数据模型中
+                self.model.a2l_axis_pts_dict = module.axis_pts_dict
 
                 # 初始化测量选择表格数据项内容，保存到视图数据模型
                 self.model.table_select_measure_raw_items.clear()
@@ -737,16 +741,27 @@ class MeasureCtrl(object):
                                             data_type=record_layout.elements[0][1].data_type,
                                             address_type=record_layout.elements[0][1].address_type,
                                             index_mode=record_layout.elements[0][1].index_mode,)
-                    # 获取原始值，将其转为物理值
-                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                    offset = int(self.model.table_calibrate_items[idx_in_table].data_addr, 16) - rom_cal_addr
-                    length = self.model.table_calibrate_items[idx_in_table].data_size
-                    raw_data =(self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
-                                                                                 length=length))
-                    self.model.table_calibrate_items[idx_in_table].data = raw_data
-                    value = self.__get_physical_value(item=self.model.table_calibrate_items[idx_in_table],
-                                                      raw_data=raw_data)
-                    self.model.table_calibrate_items[idx_in_table].value = value
+                    # 引用坐标轴的名称
+                    if obj_cal.axis_descrs:
+                        axis_refs = []
+                        for axis_descr in obj_cal.axis_descrs:
+                            axis_refs.append(axis_descr.axis_pts_ref)
+                        self.model.table_calibrate_items[idx_in_table].axis_refs = tuple(axis_refs)
+                    # 对于非VALUE类型的标定变量，如一维表、二维表，不能直接赋单个值
+                    if self.model.table_calibrate_items[idx_in_table].cal_type == 'VALUE':
+                        # 获取原始值，将其转为物理值
+                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                        offset = int(self.model.table_calibrate_items[idx_in_table].data_addr, 16) - rom_cal_addr
+                        length = self.model.table_calibrate_items[idx_in_table].data_size
+                        raw_data =(self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                     length=length))
+                        self.model.table_calibrate_items[idx_in_table].data = raw_data
+                        value = self.__get_physical_value(item=self.model.table_calibrate_items[idx_in_table],
+                                                          raw_data=raw_data)
+                        self.model.table_calibrate_items[idx_in_table].value = value
+                    else:
+                        self.model.table_calibrate_items[idx_in_table].data = b''
+                        self.model.table_calibrate_items[idx_in_table].value = '双击进行标定'
                 # 刷新
                 self.__flush_table_operate(target='calibrate')
                 self.__flush_label_operate_number(target='calibrate')
@@ -1216,6 +1231,52 @@ class MeasureCtrl(object):
             widget.grid_forget() # 网格布局中移除编辑控件
             _calibrate(item, text) # 调用标定任务
 
+        def _deal_value(item: CalibrateItem):
+            """
+            处理VALUE类型的标定数据对象
+
+            :param item: 标定数据项
+            :type item: CalibrateItem
+            """
+            # 创建内容编辑变量，设置内容编辑变量的初始值，不能是函数内变量(生命周期不够长)，否则会导致输入框无法显示初始值
+            self.__edit_var = tk.StringVar(value=value.strip())
+            # 根据选择的列和数据项属性，进行不同的处理
+            if item.conversion_type == 'RAT_FUNC':
+                # 标量，普通数值
+                widget = ttk.Spinbox(self.view.table_calibrate,
+                                     font=FONT_BUTTON,
+                                     textvariable=self.__edit_var,
+                                     from_=item.lower_limit,
+                                     to=item.upper_limit,
+                                     width=w // 10,
+                                     validate='focusout',  # 失去焦点时验证数据
+                                     validatecommand=lambda: _validate(widget, item),
+                                     )
+
+            elif item.conversion_type == 'TAB_VERB':
+                # 标量，数值映射
+                vtab = []  # 数值映射列表，存储名称
+                for k, v in item.compu_vtab.items():
+                    vtab_dict_key = ''.join(
+                        [v, ':', pad_hex(hex(k), self.model.ASAP2_TYPE_SIZE[item.data_type])])
+                    vtab.append(vtab_dict_key)
+                widget = ttk.Combobox(self.view.table_calibrate,
+                                      width=w // 10,
+                                      font=FONT_BUTTON,
+                                      textvariable=self.__edit_var,
+                                      state='readonly',
+                                      values=vtab)
+                widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
+                widget.bind('<FocusOut>', lambda e: widget.grid_forget())
+            else:
+                msg = f"尚未支持{item.name}的类型(转换类型{item.conversion_type})"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+                return
+            # 将widget放到self.table_calibrate的网格布局中, padx和pady分别取选中单元格的x偏移和y偏移
+            widget.grid(padx=x, pady=y)
+            widget.focus()
+
         # 选中数据项为空则退出
         if not self.view.table_calibrate.selection():
             return
@@ -1241,8 +1302,6 @@ class MeasureCtrl(object):
             self.view.show_warning('请先连接设备')
             return
 
-        # 创建内容编辑变量，设置内容编辑变量的初始值，不能是函数内变量(生命周期不够长)，否则会导致输入框无法显示初始值
-        self.__edit_var = tk.StringVar(value=value.strip())
         # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
         _, item = self.__iid2idx_in_table(iid=selected_iid,
                                             table_widget=self.view.table_calibrate,
@@ -1258,48 +1317,155 @@ class MeasureCtrl(object):
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
-        if item.cal_type != 'VALUE':
+
+        if item.cal_type == 'VALUE':
+            _deal_value(item=item)
+        elif item.cal_type == 'CURVE':
+            try:
+                if not item.axis_refs:
+                    return
+
+                value_pts: list[CalibrateItem] = []
+                axis_pts: list[CalibrateItem] = []
+
+                # 获取轴的信息
+                axis_info:AxisPts = self.model.a2l_axis_pts_dict[item.axis_refs[0]]
+                # 获取轴的点数
+                sum_pts = axis_info.max_axis_points
+
+                # 获取转换方法名称列表
+                conversion_names = [conversion.name for conversion in self.model.a2l_conversions]
+                # 获取转换映射表名称列表
+                compu_vtab_names = [compu_vtab.name for compu_vtab in self.model.a2l_compu_vtabs]
+                # 获取标定变量存储结构名称列表
+                record_layout_names = [record_layout.name for record_layout in self.model.a2l_record_layouts]
+
+                for idx in range(sum_pts):
+                    #############################################################################
+                    # 值数据对象
+                    #############################################################################
+                    # 深拷贝数据项
+                    value_pt = copy.deepcopy(item)
+
+                    # 修正数据项的属性
+                    value_pt.name += f"_Y({idx})" # 名称
+                    value_pt.idx_in_table_calibrate_items = -1 # 当前对象在标定表格列表中的索引
+                    value_pt.idx_in_a2l_calibrations = -1 # 当前对象在A2L标定对象列表中索引
+                    value_pt.data_addr = hex(int(item.data_addr, 16) + idx * item.data_size) # 数据地址
+                    value_pt.cal_type = 'VALUE' # 标定变量类型
+                    value_pt.axis_refs = () # 引用的坐标轴名称
+                    # 获取原始值，将其转为物理值
+                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                    offset = int(value_pt.data_addr, 16) - rom_cal_addr
+                    length = value_pt.data_size
+                    raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                  length=length))
+                    value_pt.data = raw_data
+                    value = self.__get_physical_value(item=value_pt,
+                                                      raw_data=raw_data)
+                    value_pt.value = value
+                    # 添加数据项
+                    value_pts.append(value_pt)
+
+                    #############################################################################
+                    # 轴数据对象
+                    #############################################################################
+                    # 创建轴数据点
+                    axis_pt = CalibrateItem(name=axis_info.name+f"_X({idx})")
+                    # 索引属性
+                    axis_pt.idx_in_table_calibrate_items = -1
+                    axis_pt.idx_in_a2l_calibrations = -1
+                    # 数据类型属性
+                    axis_pt.data_type = axis_info.data_type
+                    # 转换方法属性
+                    axis_pt.conversion = axis_info.conversion
+                    # 转换类型属性
+                    axis_pt.conversion_type = (
+                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].conversion_type)
+                    # 转换映射名称属性
+                    axis_pt.compu_tab_ref = (
+                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].compu_tab_ref)
+                    # 转换映射表属性
+                    # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
+                    if axis_pt.compu_tab_ref in compu_vtab_names:
+                        axis_pt.compu_vtab = (
+                            self.model.a2l_compu_vtabs[compu_vtab_names.index(axis_pt.compu_tab_ref)].read_dict)
+                    # 单位属性
+                    axis_pt.unit = (
+                            self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].unit)
+                    # 转换系数
+                    axis_pt.coeffs = (
+                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].coeffs)
+                    # 显示格式
+                    fm = self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].format
+                    if '%' in fm:
+                        fm = tuple(fm[1:].split('.'))
+                        fm0 = int(fm[0])
+                        fm1 = int(fm[1])
+                        axis_pt.format = (fm0, fm1)
+                    # 数据大小属性
+                    axis_pt.data_size = self.model.ASAP2_TYPE_SIZE[axis_pt.data_type]
+                    # 数据地址属性
+                    axis_pt.data_addr = hex(axis_info.address + idx * axis_pt.data_size) # 数据地址
+                    # 物理值下限
+                    axis_pt.lower_limit = axis_info.lower_limit
+                    # 物理值上限
+                    axis_pt.upper_limit = axis_info.upper_limit
+                    # 标定变量类型属性
+                    axis_pt.cal_type = 'VALUE'
+                    # 标定变量存储结构
+                    record_layout = self.model.a2l_record_layouts[record_layout_names.index(axis_info.record_layout)]
+                    axis_pt.record_layout = \
+                        RecordLayoutElement(name=record_layout.name,
+                                            type=record_layout.elements[0][0],
+                                            position=record_layout.elements[0][1].position,
+                                            data_type=record_layout.elements[0][1].data_type,
+                                            address_type=record_layout.elements[0][1].addressing,
+                                            index_mode=record_layout.elements[0][1].index_incr,
+                                            )
+                    # 引用坐标轴的名称
+                    axis_pt.axis_refs = ()
+                    # 对于非VALUE类型的标定变量，如一维表、二维表，不能直接赋单个值
+                    if axis_pt.cal_type == 'VALUE':
+                        # 获取原始值，将其转为物理值
+                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                        offset = int(axis_pt.data_addr, 16) - rom_cal_addr
+                        length = axis_pt.data_size
+                        raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                      length=length))
+                        axis_pt.data = raw_data
+                        value = self.__get_physical_value(item=axis_pt,
+                                                          raw_data=raw_data)
+                        axis_pt.value = value
+                    # 添加数据项
+                    axis_pts.append(axis_pt)
+
+                print('一维表')
+
+                self.__curve_view = SubCurveCalibrate(master=self.view, obj=item)
+
+                for idx in range(sum_pts):
+                    values = (idx,
+                              axis_pts[idx].value,
+                              value_pts[idx].value,)
+                    self.__curve_view.table_calibrate.insert(parent="",
+                                                             index="end",
+                                                             text="",
+                                                             values=values)
+
+
+                return
+            except Exception as e:
+                self.text_log(f'发生异常 {e}', 'error')
+                self.text_log(f"{traceback.format_exc()}", 'error')
+        elif item.cal_type == 'MAP':
+            print('二维表')
+            return
+        else:
             msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
-
-        # 根据选择的列和数据项属性，进行不同的处理
-        if item.conversion_type == 'RAT_FUNC':
-            # 标量，普通数值
-            widget = ttk.Spinbox(self.view.table_calibrate,
-                                 font=FONT_BUTTON,
-                                 textvariable=self.__edit_var,
-                                 from_=item.lower_limit,
-                                 to=item.upper_limit,
-                                 width=w//10,
-                                 validate='focusout', # 失去焦点时验证数据
-                                 validatecommand=lambda:_validate(widget, item),
-                                 )
-
-        elif item.conversion_type == 'TAB_VERB':
-            # 标量，数值映射
-            vtab = [] # 数值映射列表，存储名称
-            for k, v in item.compu_vtab.items():
-                vtab_dict_key = ''.join(
-                    [v, ':', pad_hex(hex(k), self.model.ASAP2_TYPE_SIZE[item.data_type])])
-                vtab.append(vtab_dict_key)
-            widget = ttk.Combobox(self.view.table_calibrate,
-                                  width=w//10,
-                                  font=FONT_BUTTON,
-                                  textvariable=self.__edit_var,
-                                  state='readonly',
-                                  values=vtab)
-            widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
-            widget.bind('<FocusOut>', lambda e: widget.grid_forget())
-        else:
-            msg = f"尚未支持{item.name}的类型(转换类型{item.conversion_type})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
-        # 将widget放到self.table_calibrate的网格布局中, padx和pady分别取选中单元格的x偏移和y偏移
-        widget.grid(padx=x, pady=y)
-        widget.focus()
 
     def handler_on_save_calibrate(self) -> str | None:
         """
