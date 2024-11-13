@@ -177,6 +177,10 @@ class MeasureCtrl(object):
             msg_his = ''
 
             if self.model.opened_a2l_filepath:
+                if not os.path.exists(self.model.opened_a2l_filepath):
+                    msg = f"不存在A2L文件 -> {self.model.opened_a2l_filepath}"
+                    self.text_log(msg, 'warning')
+                    return
                 # 读取a2l文件
                 with open(self.model.opened_a2l_filepath, 'rb') as f:
                     a2l_string = f.read()
@@ -263,6 +267,10 @@ class MeasureCtrl(object):
 
             # 打开程序文件
             if self.model.opened_pgm_filepath:
+                if not os.path.exists(self.model.opened_pgm_filepath):
+                    msg = f"不存在程序文件 -> {self.model.opened_pgm_filepath}"
+                    self.text_log(msg, 'warning')
+                    return
                 # 获取程序文件处理对象
                 self.model.obj_srecord = Srecord(self.model.opened_pgm_filepath)
                 # 获取程序文件epk信息
@@ -293,6 +301,7 @@ class MeasureCtrl(object):
                                f"\n\t文件路径 -> {self.model.table_history_filepath}")
 
             # 显示文件信息
+            self.text_log(' ======文件信息======', 'done')
             if msg_a2l:
                 self.text_log(msg_a2l)
             if msg_pgm:
@@ -1238,8 +1247,25 @@ class MeasureCtrl(object):
         _, item = self.__iid2idx_in_table(iid=selected_iid,
                                             table_widget=self.view.table_calibrate,
                                             raw_items=self.model.table_calibrate_items)
+
+        if item.record_layout.address_type != 'DIRECT':
+            msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return
+        if item.record_layout.index_mode != 'COLUMN_DIR':
+            msg = f"尚未支持{item.name}的类型(顺序存储类型{item.record_layout.index_mode})"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return
+        if item.cal_type != 'VALUE':
+            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return
+
         # 根据选择的列和数据项属性，进行不同的处理
-        if item.cal_type == 'VALUE' and item.conversion_type == 'RAT_FUNC':
+        if item.conversion_type == 'RAT_FUNC':
             # 标量，普通数值
             widget = ttk.Spinbox(self.view.table_calibrate,
                                  font=FONT_BUTTON,
@@ -1251,7 +1277,7 @@ class MeasureCtrl(object):
                                  validatecommand=lambda:_validate(widget, item),
                                  )
 
-        elif item.cal_type == 'VALUE' and item.conversion_type == 'TAB_VERB':
+        elif item.conversion_type == 'TAB_VERB':
             # 标量，数值映射
             vtab = [] # 数值映射列表，存储名称
             for k, v in item.compu_vtab.items():
@@ -1267,7 +1293,7 @@ class MeasureCtrl(object):
             widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
             widget.bind('<FocusOut>', lambda e: widget.grid_forget())
         else:
-            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type},转换类型{item.conversion_type})"
+            msg = f"尚未支持{item.name}的类型(转换类型{item.conversion_type})"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
@@ -2027,6 +2053,7 @@ class MeasureCtrl(object):
         _q = self.model.q  # 显示值队列
         _obj_measure = self.model.obj_measure  # 是否已测量
         _table_monitor = self.view.table_measure  # 测量表格
+        _table_measure_items = self.model.table_measure_items # 测量表格数据项
         # 获取测量表格中所有的item_id列表
         _table_monitor_iids = _table_monitor.get_children()
         # 获取测量表格列名组成的元组
@@ -2040,6 +2067,7 @@ class MeasureCtrl(object):
             for idx, value in display_values.items():
                 item_id = _table_monitor_iids[idx]
                 _disp(item_id, value)
+                _table_measure_items[idx].value = value
         except:
             pass
         self.__after_id = self.view.after(ms=int(self.model.refresh_operate_measure_time_ms),

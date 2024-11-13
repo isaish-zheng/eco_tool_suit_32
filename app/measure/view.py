@@ -11,6 +11,7 @@
 ##############################
 
 import base64  # Base64编码解码模块
+from pprint import pformat  # 格式化输出模块
 from typing import Any
 
 from tkui import icon
@@ -23,6 +24,89 @@ from .model import MeasureModel
 ##############################
 # View API function declarations
 ##############################
+
+class PropertyTipBox(GetDpiMixIn):
+    """
+    悬浮显示表格选中项属性的内容
+
+    :param master: 显示提示信息的控件
+    :type master: TkTreeView
+    :param text: 提示内容
+    :type text: str
+    :param bg: 背景颜色
+    :type bg: str
+    """
+    def __init__(self,
+                 master: TkTreeView,
+                 text: str ='默认信息',
+                 bg: str ='#fafdc2'):
+        """构造函数"""
+        # 操作系统使用程序自身的dpi适配
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+
+        self.master = master
+        self.text = text
+        self.bg = bg
+        self.x = self.y = 0
+
+        # 窗口
+        self.tip: tk.Toplevel = None
+
+        # 绑定事件
+        self.master.bind("<Double-1>", lambda e: (self.set_root(e)))
+        self.master.bind("<Motion>", lambda e: self.leave())
+
+    def set_root(self, e: tk.Event = None) -> None:
+        """
+        创建提示窗口
+
+        :param e: 事件
+        :type e: tk.Event
+        """
+        # 选中数据项为空则退出
+        if not self.master.selection():
+            return
+
+        selected_iid = self.master.selection()[0]  # 选中的数据项id
+        col_names = self.master['columns']  # 表列名列表
+        # 判断鼠标点击事件的位置, 是否在选中数据项的边界内, 如果在, 则获取该列的列名和数据项值，否则退出
+        for idx, col_name in enumerate(col_names):
+            # 获取选中数据项的边界（相对于控件窗口的坐标），形式为 (x, y, width, height)
+            x, y, w, h = self.master.bbox(selected_iid, col_name)
+            if x < e.x < x + w and y < e.y < y + h:
+                selected_col = col_name  # 选中的数据项所在列的列名
+                value = self.master.item(selected_iid, 'values')[idx]  # 选中的数据项的值
+                break
+        else:
+            return
+
+        # 若不是Content列则退出
+        if selected_col != 'Content':
+            return
+
+        x = e.x_root + super().get_dpi(18)
+        y = e.y_root + super().get_dpi(18)
+        self.tip = tk.Toplevel(self.master)
+        self.tip.wm_overrideredirect(True)  # 去边框
+        self.tip.wm_attributes("-topmost", 1)  # 置顶
+        self.tip.wm_geometry("+%d+%d" % (x, y))
+
+        self.text = pformat(value)
+        label = tk.Label(self.tip,
+                         text=self.text,
+                         bg=self.bg,
+                         relief=tk.SOLID,
+                         borderwidth=1,
+                         # wraplength=super().get_dpi(200),
+                         justify=tk.LEFT)
+        label.pack(ipadx=1)
+
+    def leave(self):
+        # 销毁提示窗口
+        if self.tip:
+            self.tip.destroy()
+
+
 class SubWindowProperty(tk.Toplevel, GetDpiMixIn):
     """
     测量标定视图，子窗口
@@ -111,15 +195,15 @@ class SubWindowProperty(tk.Toplevel, GetDpiMixIn):
         # self.table_property.column("#0", width=420, minwidth=100)
         # 设置滚动条
         self.table_property.create_scrollbar()
-        # 绑定数据项选择事件
-        # self.table_property.bind("<<TreeviewSelect>>",
-        #                          lambda e: self.presenter.handler_on_measurement_item_selected(e))
         # 设置表头
         self.table_property["columns"] = ("Property", "Content")
         self.table_property.column("Property", anchor='w', width=super().get_dpi(200))  # 表示列,不显示
         self.table_property.column("Content", anchor='w', width=super().get_dpi(200))
         self.table_property.heading("Property", anchor='w', text="Property")  # 显示表头
         self.table_property.heading("Content", anchor='w', text="Content")
+
+        # 设置属性值悬浮窗
+        self.__tip = PropertyTipBox(master=self.table_property, bg=COLOR_LABEL_BG)
 
     def show_property(self) -> None:
         """
@@ -148,6 +232,7 @@ class SubWindowProperty(tk.Toplevel, GetDpiMixIn):
                                            index="end",
                                            text="",
                                            values=(attribute, getattr(self.obj, attribute)),
+                                           tags=['tag_1',],
                                            )
 
 
