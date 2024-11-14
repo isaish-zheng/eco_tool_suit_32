@@ -301,6 +301,10 @@ class MeasureModel(object):
         self.table_select_calibrate_raw_items: list[SelectCalibrateItem] = []  # 存储选择标定数据项表格所有的数据项内容
         self.table_select_calibrate_filter_items: list[SelectCalibrateItem] = []  # 存储选择表格当前显示的数据项内容（筛选后的数据项）
 
+        self.table_calibrate_axis_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴数据项内容
+        self.table_calibrate_axis2_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴数据项内容
+        self.table_calibrate_value_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴对应值数据项内容
+
         # 存储daq列表配置字典{daq通道：{'first_pid':int,'odts_size':int},}
         # 例如{1: {'first_pid': 0x3c, 'odts_size': 0x20},
         #     2: {'first_pid': 0x78, 'odts_size': 0x30}}

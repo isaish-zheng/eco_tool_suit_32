@@ -33,7 +33,7 @@ from tkui.tktypes import FONT_BUTTON
 from utils import singleton, pad_hex
 
 from .model import MeasureModel, SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement
-from .view import tk, ttk, MeasureView, TkTreeView, SubWindowProperty, SubCurveCalibrate
+from .view import tk, ttk, MeasureView, TkTreeView, SubPropertyView, SubCalibrateCurveView, SubCalibrateValueView
 from ..download.model import DownloadModel
 
 
@@ -314,9 +314,10 @@ class MeasureCtrl(object):
                 self.text_log(msg_his)
             if self.model.a2l_epk and self.model.pgm_epk:
                 if self.model.a2l_epk == self.model.pgm_epk:
-                    self.text_log('a2l、pgm双方epk匹配成功！', 'done')
+                    self.text_log('a2l、pgm双方epk匹配成功', 'done')
                 else:
-                    self.text_log('a2l、pgm双方epk匹配失败！', 'error')
+                    self.text_log('a2l、pgm双方epk匹配失败', 'error')
+                    self.view.show_warning('a2l、pgm双方epk匹配失败')
 
             # 若history_epk存在且和当前a2l_epk一致，则使用历史数据中的epk
             if self.model.a2l_epk and self.model.a2l_epk == self.model.history_epk:
@@ -407,24 +408,24 @@ class MeasureCtrl(object):
                 name = table.item(iid, "values")[column_names.index("Name")]
                 if target == 'select_measure' and selected_iids:
                     names = [item.name for item in self.model.a2l_measurements]
-                    SubWindowProperty(master=self.view,
-                                      obj=self.model.a2l_measurements[names.index(name)],
-                                      target='measure')
+                    SubPropertyView(master=self.view,
+                                    obj=self.model.a2l_measurements[names.index(name)],
+                                    target='measure')
                 if target == 'measure' and selected_iids:
                     names = [item.name for item in self.model.table_measure_items]
-                    SubWindowProperty(master=self.view,
-                                      obj=self.model.table_measure_items[names.index(name)],
-                                      target='measure')
+                    SubPropertyView(master=self.view,
+                                    obj=self.model.table_measure_items[names.index(name)],
+                                    target='measure')
                 if target == 'calibrate' and selected_iids:
                     names = [item.name for item in self.model.table_calibrate_items]
-                    SubWindowProperty(master=self.view,
-                                      obj=self.model.table_calibrate_items[names.index(name)],
-                                      target='calibrate')
+                    SubPropertyView(master=self.view,
+                                    obj=self.model.table_calibrate_items[names.index(name)],
+                                    target='calibrate')
                 if target == 'select_calibrate' and selected_iids:
                     names = [item.name for item in self.model.a2l_calibrations]
-                    SubWindowProperty(master=self.view,
-                                      obj=self.model.a2l_calibrations[names.index(name)],
-                                      target='calibrate')
+                    SubPropertyView(master=self.view,
+                                    obj=self.model.a2l_calibrations[names.index(name)],
+                                    target='calibrate')
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
@@ -894,9 +895,10 @@ class MeasureCtrl(object):
                     epk = future.result()[0]
                     if epk == self.model.a2l_epk and \
                             epk == self.model.pgm_epk:
-                        self.text_log(f'pgm、a2l、ecu三方epk匹配成功！', 'done')
+                        self.text_log(f'pgm、a2l、ecu三方epk匹配成功', 'done')
                     else:
-                        self.text_log(f'pgm、a2l、ecu三方epk匹配失败！', 'done')
+                        self.text_log(f'pgm、a2l、ecu三方epk匹配失败', 'error')
+                        self.view.show_warning('pgm、a2l、ecu三方epk匹配失败')
                     is_cal_matched = future.result()[1]
                     if not is_cal_matched:
                         self.view.show_warning('ecu标定数据区与pgm标定数据区不一致')
@@ -1109,203 +1111,30 @@ class MeasureCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_table_calibrate_edit(self, e: tk.Event):
+    def handler_on_table_calibrate_edit(self, e: tk.Event, table: ttk.Treeview):
         """
         双击标定表格更改标定变量的值
 
         :param e: 事件
         :type e: tk.Event
+        :param table: 表格
+        :type table: ttk.Treeview
         """
-        def _calibrate(item: CalibrateItem, value: str) -> None:
-            """
-            修改值
 
-            :param item: 标定数据项
-            :type item: CalibrateItem
-            :param value: 标定值(字符串显示形式,对于映射为显示名称)
-            :type value: str
-            """
-            def _callback(future, item: CalibrateItem, value: str, data: bytes):
-                """
-                线程执行结束的回调函数，执行成功则标定数据显示，刷新程序标定区
-
-                :param future: 线程执行结束返回的future对象
-                :type future: concurrent.futures.Future
-                :param item: 标定数据项
-                :type item: CalibrateItem
-                :param value: 标定值(数字字符串显示形式,对于映射则为显示名称)
-                :type value: str
-                :param data: 标定数据序列(大端)
-                :type data: bytes
-                """
-                try:
-                    # 若线程执行中存在异常，则抛出此异常信息
-                    if future.exception():
-                        self.view.show_warning('修改失败')
-                        raise Exception(future.exception())
-                    if future.result():
-                        self.text_log(f'修改成功', 'done')
-                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                        addr = int(self.model.table_calibrate_items[item.idx_in_table_calibrate_items].data_addr,
-                                   16) - rom_cal_addr
-                        item.value = value # 更新单元格为标定后的值
-                        item.data = data
-                        self.__flush_table_operate(target='calibrate')
-                        self.model.obj_srecord.flush_cal_data(offset = addr, data = data) # 更新PGM对象的标定区
-                    else:
-                        self.text_log(f'修改失败', 'error')
-                        self.view.show_warning('修改失败')
-                except Exception as e:
-                    self.text_log(f'发生异常 {e}', 'error')
-                    self.text_log(f"{traceback.format_exc()}", 'error')
-
-            try:
-                self.text_log(f'======修改RAM区标定数据======', 'done')
-                rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                ram_cal_addr = self.model.a2l_memory_ram_cal.address
-                # 计算标定地址和标定值
-                addr = ram_cal_addr + int(item.data_addr, 16) - rom_cal_addr
-                val, data = self.__get_raw_data(item=item,
-                                                physical_value=value)
-                msg = (f"标定变量->{item.name},"
-                       f"\n\t物理值->{item.value},"
-                       f"\n\t原始值->0x{item.data.hex()},"
-                       f"\n\t标定物理值->{val},"
-                       f"\n\t标定原始值->0x{data.hex()},"
-                       f"\n\t地址->{hex(addr)},"
-                       f"\n\t数据类型->{self.model.table_calibrate_items[idx].data_type}")
-                self.text_log(msg)
-                if val is None or data is None:
-                    self.text_log(f'标定值未知', 'error')
-                    self.view.show_warning('标定值未知')
-                    return
-                if item.data == data:
-                    self.text_log(f'标定值未变化，无需修改', 'warning')
-                    return
-                (self.__pool.submit(self.model.obj_measure.write_ram_cal, addr, data).
-                 add_done_callback(lambda f: _callback(f,
-                                                       item=item,
-                                                       value=val,
-                                                       data=data))
-                 )
-            except Exception as e:
-                self.text_log(f'发生异常 {e}', 'error')
-                self.text_log(f"{traceback.format_exc()}", 'error')
-
-        def _validate(widget: ttk.Spinbox | ttk.Combobox, item: CalibrateItem):
-            """
-            验证数据符合规则后，调用标定任务
-
-            :param widget: 编辑控件
-            :type widget: ttk.Spinbox | ttk.Combobox
-            :param item: 标定数据项
-            :type item: CalibrateItem
-            """
-            text = widget.get().strip()
-            lower_limit = item.lower_limit
-            upper_limit = item.upper_limit
-            if isinstance(widget, ttk.Spinbox): # 若控件为数值输入框
-                # 验证是否为数值
-                try:
-                    float(text)
-                except ValueError:
-                    widget.grid_forget()
-                    msg = f"变量{item.name}的值必须是数字"
-                    self.text_log(msg, 'error')
-                    self.view.show_warning(msg)
-                    return
-                # 格式化
-                fm = item.format
-                if fm:
-                    text = f"{float(text): <{fm[0]}.{fm[1]}f}"
-                # 验证是否在指定范围内
-                if float(text) - upper_limit > 1E-6 or \
-                        float(text) - lower_limit < -1e-6:
-                    widget.grid_forget()
-                    msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
-                    self.text_log(msg, 'error')
-                    self.view.show_warning(msg)
-                    return
-            elif isinstance(widget, ttk.Combobox): # 若控件为下拉选择框
-                pass
-            widget.grid_forget() # 网格布局中移除编辑控件
-            _calibrate(item, text) # 调用标定任务
-
-        def _deal_value(item: CalibrateItem):
-            """
-            处理VALUE类型的标定数据对象
-
-            :param item: 标定数据项
-            :type item: CalibrateItem
-            """
-            # 创建内容编辑变量，设置内容编辑变量的初始值，不能是函数内变量(生命周期不够长)，否则会导致输入框无法显示初始值
-            self.__edit_var = tk.StringVar(value=value.strip())
-            # 根据选择的列和数据项属性，进行不同的处理
-            if item.conversion_type == 'RAT_FUNC':
-                # 标量，普通数值
-                widget = ttk.Spinbox(self.view.table_calibrate,
-                                     font=FONT_BUTTON,
-                                     textvariable=self.__edit_var,
-                                     from_=item.lower_limit,
-                                     to=item.upper_limit,
-                                     width=w // 10,
-                                     validate='focusout',  # 失去焦点时验证数据
-                                     validatecommand=lambda: _validate(widget, item),
-                                     )
-
-            elif item.conversion_type == 'TAB_VERB':
-                # 标量，数值映射
-                vtab = []  # 数值映射列表，存储名称
-                for k, v in item.compu_vtab.items():
-                    vtab_dict_key = ''.join(
-                        [v, ':', pad_hex(hex(k), self.model.ASAP2_TYPE_SIZE[item.data_type])])
-                    vtab.append(vtab_dict_key)
-                widget = ttk.Combobox(self.view.table_calibrate,
-                                      width=w // 10,
-                                      font=FONT_BUTTON,
-                                      textvariable=self.__edit_var,
-                                      state='readonly',
-                                      values=vtab)
-                widget.bind('<<ComboboxSelected>>', lambda e: _validate(widget, item))
-                widget.bind('<FocusOut>', lambda e: widget.grid_forget())
-            else:
-                msg = f"尚未支持{item.name}的类型(转换类型{item.conversion_type})"
-                self.text_log(msg, 'error')
-                self.view.show_warning(msg)
-                return
-            # 将widget放到self.table_calibrate的网格布局中, padx和pady分别取选中单元格的x偏移和y偏移
-            widget.grid(padx=x, pady=y)
-            widget.focus()
-
-        # 选中数据项为空则退出
-        if not self.view.table_calibrate.selection():
+        # 获取选中的单元格
+        selected_iid, selected_col, (x, y, w, h) = (self.__get_selected_cell_in_table(e=e,
+                                                                                      table=table))
+        # 未选中单元格则退出
+        if not selected_iid or not selected_col:
             return
-
-        selected_iid = self.view.table_calibrate.selection()[0] # 选中的数据项id
-        col_names = self.view.table_calibrate['columns'] # 表列名列表
-        # 判断鼠标点击事件的位置, 是否在选中数据项的边界内, 如果在, 则获取该列的列名和数据项值，否则退出
-        for idx, col_name in enumerate(col_names):
-            # 获取选中数据项的边界（相对于控件窗口的坐标），形式为 (x, y, width, height)
-            x, y, w, h = self.view.table_calibrate.bbox(selected_iid, col_name)
-            if x < e.x < x + w and y < e.y < y + h:
-                selected_col = col_name # 选中的数据项所在列的列名
-                value = self.view.table_calibrate.item(selected_iid, 'values')[idx] # 选中的数据项的值
-                break
-        else:
-            return
-
+        print(f"selected_col:{selected_col}")
         # 若不是修改Value列则退出
         if selected_col != 'Value':
             return
-        # 若未连接设备则退出
-        if not (self.model.obj_measure and self.model.obj_measure.has_connected):
-            self.view.show_warning('请先连接设备')
-            return
-
         # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
         _, item = self.__iid2idx_in_table(iid=selected_iid,
-                                            table_widget=self.view.table_calibrate,
-                                            raw_items=self.model.table_calibrate_items)
+                                          table_widget=table,
+                                          raw_items=self.model.table_calibrate_items)
 
         if item.record_layout.address_type != 'DIRECT':
             msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
@@ -1319,7 +1148,10 @@ class MeasureCtrl(object):
             return
 
         if item.cal_type == 'VALUE':
-            _deal_value(item=item)
+            SubCalibrateValueView(master=table,
+                                  item=item,
+                                  geometry=(x,y,w,h),
+                                  presenter=self)
         elif item.cal_type == 'CURVE':
             try:
                 if not item.axis_refs:
@@ -1442,7 +1274,10 @@ class MeasureCtrl(object):
 
                 print('一维表')
 
-                self.__curve_view = SubCurveCalibrate(master=self.view, obj=item)
+                self.__curve_view = SubCalibrateCurveView(master=self.view,
+                                                          axis_pts=axis_pts,
+                                                          value_pts=value_pts,
+                                                          presenter=self)
 
                 for idx in range(sum_pts):
                     values = (idx,
@@ -1453,7 +1288,8 @@ class MeasureCtrl(object):
                                                              text="",
                                                              values=values)
 
-
+                self.model.table_calibrate_axis_pts = axis_pts
+                self.model.table_calibrate_value_pts = value_pts
                 return
             except Exception as e:
                 self.text_log(f'发生异常 {e}', 'error')
@@ -1466,6 +1302,169 @@ class MeasureCtrl(object):
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
+
+    def handler_on_table_Curve_edit(self, e: tk.Event, table: ttk.Treeview):
+        """
+        双击标定表格更改Curve标定变量的值
+
+        :param e: 事件
+        :type e: tk.Event
+        :param table: 表格
+        :type table: ttk.Treeview
+        """
+
+        # 获取选中的单元格
+        selected_iid, selected_col, (x, y, w, h) = (self.__get_selected_cell_in_table(e=e,
+                                                                                      table=table))
+        # 未选中单元格则退出
+        if not selected_iid or not selected_col:
+            return
+        print(f"selected_col:{selected_col}")
+        # 若不是修改X或Y列则退出
+        if selected_col != 'X' and selected_col != 'Y':
+            return
+        # 获取要标定的数据项
+        idx = table.get_children().index(selected_iid)
+        if selected_col == 'X':
+            item = self.model.table_calibrate_axis_pts[idx]
+        elif selected_col == 'Y':
+            item = self.model.table_calibrate_value_pts[idx]
+        # if item.record_layout.address_type != 'DIRECT':
+        #     msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
+        #     self.text_log(msg, 'error')
+        #     self.view.show_warning(msg)
+        #     return
+        # if item.record_layout.index_mode != 'COLUMN_DIR':
+        #     msg = f"尚未支持{item.name}的类型(顺序存储类型{item.record_layout.index_mode})"
+        #     self.text_log(msg, 'error')
+        #     self.view.show_warning(msg)
+        #     return
+
+        if item.cal_type == 'VALUE':
+            SubCalibrateValueView(master=table,
+                                  item=item,
+                                  geometry=(x,y,w,h),
+                                  presenter=self)
+        else:
+            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return
+
+    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox, item: CalibrateItem):
+        """
+        验证标定数据数据符合规则后，执行标定任务
+
+        :param widget: 编辑控件
+        :type widget: ttk.Spinbox | ttk.Combobox
+        :param item: 标定数据项
+        :type item: CalibrateItem
+        """
+        def _calibrate(item: CalibrateItem, value: str) -> None:
+            """
+            修改值
+
+            :param item: 标定数据项
+            :type item: CalibrateItem
+            :param value: 标定值(字符串显示形式,对于映射为显示名称)
+            :type value: str
+            """
+            def _callback(future, item: CalibrateItem, value: str, data: bytes):
+                """
+                线程执行结束的回调函数，执行成功则标定数据显示，刷新程序标定区
+
+                :param future: 线程执行结束返回的future对象
+                :type future: concurrent.futures.Future
+                :param item: 标定数据项
+                :type item: CalibrateItem
+                :param value: 标定值(数字字符串显示形式,对于映射则为显示名称)
+                :type value: str
+                :param data: 标定数据序列(大端)
+                :type data: bytes
+                """
+                try:
+                    # 若线程执行中存在异常，则抛出此异常信息
+                    if future.exception():
+                        self.view.show_warning('修改失败')
+                        raise Exception(future.exception())
+                    if future.result():
+                        self.text_log(f'修改成功', 'done')
+                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                        addr = int(self.model.table_calibrate_items[item.idx_in_table_calibrate_items].data_addr,
+                                   16) - rom_cal_addr
+                        item.value = value # 更新单元格为标定后的值
+                        item.data = data
+                        self.__flush_table_operate(target='calibrate')
+                        self.model.obj_srecord.flush_cal_data(offset = addr, data = data) # 更新PGM对象的标定区
+                    else:
+                        self.text_log(f'修改失败', 'error')
+                        self.view.show_warning('修改失败')
+                except Exception as e:
+                    self.text_log(f'发生异常 {e}', 'error')
+                    self.text_log(f"{traceback.format_exc()}", 'error')
+
+            try:
+                self.text_log(f'======修改RAM区标定数据======', 'done')
+                rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                ram_cal_addr = self.model.a2l_memory_ram_cal.address
+                # 计算标定地址和标定值
+                addr = ram_cal_addr + int(item.data_addr, 16) - rom_cal_addr
+                val, data = self.__get_raw_data(item=item,
+                                                physical_value=value)
+                if val is None or data is None:
+                    self.text_log(f'标定值未知', 'error')
+                    self.view.show_warning('标定值未知')
+                    return
+                msg = (f"标定变量->{item.name},"
+                       f"\n\t物理值->{item.value},"
+                       f"\n\t原始值->0x{item.data.hex()},"
+                       f"\n\t标定物理值->{val},"
+                       f"\n\t标定原始值->0x{data.hex()},"
+                       f"\n\t地址->{hex(addr)},"
+                       f"\n\t数据类型->{item.data_type}")
+                self.text_log(msg)
+                if item.data == data:
+                    self.text_log(f'标定值未变化，无需修改', 'warning')
+                    return
+                (self.__pool.submit(self.model.obj_measure.write_ram_cal, addr, data).
+                 add_done_callback(lambda f: _callback(f,
+                                                       item=item,
+                                                       value=val,
+                                                       data=data))
+                 )
+            except Exception as e:
+                self.text_log(f'发生异常 {e}', 'error')
+                self.text_log(f"{traceback.format_exc()}", 'error')
+
+        text = widget.get().strip()
+        lower_limit = item.lower_limit
+        upper_limit = item.upper_limit
+        if isinstance(widget, ttk.Spinbox):  # 若控件为数值输入框
+            # 验证是否为数值
+            try:
+                float(text)
+            except ValueError:
+                widget.grid_forget()
+                msg = f"变量{item.name}的值必须是数字"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+                return
+            # 格式化
+            fm = item.format
+            if fm:
+                text = f"{float(text): <{fm[0]}.{fm[1]}f}"
+            # 验证是否在指定范围内
+            if float(text) - upper_limit > 1E-6 or \
+                    float(text) - lower_limit < -1e-6:
+                widget.grid_forget()
+                msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+                return
+        elif isinstance(widget, ttk.Combobox):  # 若控件为下拉选择框
+            pass
+        widget.grid_forget()  # 网格布局中移除编辑控件
+        _calibrate(item, text)  # 调用标定任务
 
     def handler_on_save_calibrate(self) -> str | None:
         """
@@ -2241,16 +2240,16 @@ class MeasureCtrl(object):
 
     @staticmethod
     def __iid2idx_in_table(iid: str,
-                           table_widget: TkTreeView,
+                           table_widget: TkTreeView | ttk.Treeview,
                            raw_items: list[SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem],
                            ) -> tuple[int, SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]:
         """
-        根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
+        根据表格数据项iid查询Name列的值，根据Name追溯填充此表格数据项列表的相应索引及其数据
 
         :param iid: 表格数据项id
         :type iid: str
         :param table_widget: 表格控件
-        :type table_widget: TkTreeView
+        :type table_widget: TkTreeView | ttk.Treeview
         :param raw_items: 填充表格数据项的列表
         :type raw_items: list[SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]
         :return: (index,数据项对象)
@@ -2276,3 +2275,33 @@ class MeasureCtrl(object):
             raise TypeError(f'iid2idx尚未支持类型{type(raw_items[0])}')
         # 返回
         return idx, table_item
+
+    @staticmethod
+    def __get_selected_cell_in_table(e: tk.Event,
+                                     table: ttk.Treeview, ) -> tuple[str, str, tuple[int, int, int, int]]:
+        """
+        获取表格中选中的单元格，返回（iid，列名，几何位置）
+
+        :param e: 事件
+        :type e: tk.Event
+        :param table: 表格
+        :type table: ttk.Treeview
+        :return: (iid，列名，几何位置)
+        :rtype: tuple[str,str,tuple[int,int,int,int]]
+        """
+        iid = ''
+        selected_col = ''
+        x = y = w = h = 0
+        # 选中数据项为空则退出
+        if not table.selection():
+            return iid, selected_col, (x, y, w, h)
+        iid = table.selection()[0]  # 选中的数据项id
+        col_names = table['columns']  # 表列名列表
+        # 判断鼠标点击事件的位置, 是否在选中数据项的边界内, 如果在, 则获取该列的列名和数据项值，否则退出
+        for idx, col_name in enumerate(col_names):
+            # 获取选中单元格的边界（相对于控件窗口的坐标），形式为 (x, y, width, height)
+            x, y, w, h = table.bbox(iid, col_name)
+            if x < e.x < x + w and y < e.y < y + h:
+                selected_col = col_name  # 选中的数据项所在列的列名
+                break
+        return iid, selected_col, (x, y, w, h)
