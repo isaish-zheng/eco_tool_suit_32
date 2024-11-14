@@ -12,6 +12,7 @@
 
 import base64  # Base64编码解码模块
 import tkinter
+from tkinter import font
 from pprint import pformat  # 格式化输出模块
 from typing import Any
 
@@ -297,16 +298,26 @@ class SubCalibrateValueView(GetDpiMixIn):
         # 根据选择的列和数据项属性，进行不同的处理
         if self.item.conversion_type == 'RAT_FUNC':
             # 标量，普通数值
-            self.edit_widget = ttk.Spinbox(self.master,
-                                           font=FONT_BUTTON,
-                                           textvariable=self.edit_var,
-                                           from_=self.item.lower_limit,
-                                           to=self.item.upper_limit,
-                                           width=self.width // 10,
-                                           validate='focusout',  # 失去焦点时验证数据
-                                           validatecommand=lambda:
-                                           self.presenter.handler_on_calibrate_value(self.edit_widget, self.item),
-                                           )
+            # self.edit_widget = ttk.Spinbox(self.master,
+            #                                font=FONT_BUTTON,
+            #                                textvariable=self.edit_var,
+            #                                from_=self.item.lower_limit,
+            #                                to=self.item.upper_limit,
+            #                                width=self.width // 11,
+            #                                validate='focusout',  # 失去焦点时验证数据
+            #                                validatecommand=lambda:
+            #                                self.presenter.handler_on_calibrate_value(self.edit_widget, self.item),
+            #                                )
+            self.edit_widget = tk.Entry(self.master,
+                                        font=FONT_BUTTON,
+                                        textvariable=self.edit_var,
+                                        width=self.width // 11,
+                                        relief=tkinter.SOLID,
+                                        borderwidth=1,
+                                        justify=tk.LEFT
+                                        )
+            self.edit_widget.bind('<FocusOut>',
+                                  lambda e: self.presenter.handler_on_calibrate_value(self.edit_widget, self.item))
         elif self.item.conversion_type == 'TAB_VERB':
             # 标量，数值映射
             vtab = []  # 数值映射列表，存储名称
@@ -315,11 +326,13 @@ class SubCalibrateValueView(GetDpiMixIn):
                     [v, ':', pad_hex(hex(k), self.item.data_size)])
                 vtab.append(vtab_dict_key)
             self.edit_widget = ttk.Combobox(self.master,
-                                            width=self.width // 10,
                                             font=FONT_BUTTON,
                                             textvariable=self.edit_var,
+                                            width=self.width // 11,
                                             state='readonly',
-                                            values=vtab)
+                                            values=vtab,
+                                            justify=tk.LEFT
+                                            )
             self.edit_widget.bind('<<ComboboxSelected>>',
                                   lambda e: self.presenter.handler_on_calibrate_value(self.edit_widget, self.item))
             self.edit_widget.bind('<FocusOut>', lambda e: self.leave())
@@ -428,16 +441,27 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
                      )
 
         # 设置区域容器
-        self.frame = tk.Frame(master=self,
+        frame = tk.Frame(master=self,
                               bg='red',
                               borderwidth=1,
-                              width=super().get_dpi(self.WIDTH_FRAME),
+                              width=super().get_dpi(self.WIDTH_FRAME-80),
                               )
-        self.frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
-        self.frame.pack(expand=tk.FALSE,
+        frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
+        frame.pack(expand=tk.FALSE,
                         fill=tk.Y,
                         side=tk.LEFT,
                         )
+
+        frame2 = tk.Frame(master=self,
+                              bg='yellow',
+                              borderwidth=1,
+                              width=super().get_dpi(WIDTH_SCROLLER_BAR),
+                              )
+        frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
+        frame2.pack(expand=tk.FALSE,
+                            fill=tk.Y,
+                            side=tk.LEFT,
+                            )
 
         # 设置表格风格
         style = ttk.Style()
@@ -445,7 +469,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
                         font=FONT_BUTTON,
                         rowheight=super().get_dpi(18), )
         # 创建表格
-        self.table_calibrate = ttk.Treeview(master=self.frame,
+        self.table_calibrate = ttk.Treeview(master=frame,
                                             show="headings",
                                             selectmode="extended",
                                             style="Custom.Treeview",
@@ -458,40 +482,45 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
         self.table_calibrate.heading("No.", anchor='w', text="No.")  # 显示表头
         self.table_calibrate.heading("X", anchor='w', text="X")
         self.table_calibrate.heading("Y", anchor='w', text="Y")
-        self.table_calibrate.pack_propagate(tk.FALSE)  # 禁用传递几何位置
-        self.table_calibrate.pack(expand=tk.FALSE,
-                                  fill=tk.Y,
+        self.table_calibrate.pack(expand=tk.TRUE,
+                                  fill=tk.BOTH,
                                   side=tk.LEFT,
                                   )
         # 创建一个垂直滚动条组件，并将它与组件绑定
-        y_scrollbar = ttk.Scrollbar(master=self.frame,
+        y_scrollbar = ttk.Scrollbar(master=frame2,
                                     orient='vertical',
                                     command=self.table_calibrate.yview)
-        y_scrollbar.pack_propagate(tk.FALSE)  # 禁用传递几何位置
         y_scrollbar.pack(expand=tk.FALSE,
                          fill=tk.Y,
                          side=tk.LEFT,
+                         anchor=tk.W
                          )
         self.table_calibrate.config(yscrollcommand=y_scrollbar.set)
 
+
+
+        # 鼠标事件
+        self.table_calibrate.bind("<Double-3>",
+                                  lambda e: self.__show_property(e))
         self.table_calibrate.bind('<Double-1>',
-                                  lambda e: self.presenter.handler_on_table_Curve_edit(e, self.table_calibrate))
+                                  lambda e: self.presenter.handler_on_table_curve_edit(e, self.table_calibrate))
 
-        print(self.table_calibrate.column("X"))
-        # 鼠标右键菜单
-        # table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
-        #                      bg=COLOR_FRAME_BG, fg='black',
-        #                      activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
-        # table_menu.add_command(label="删除",
-        #                        command=lambda: self.presenter.handler_on_delete_item(target='calibrate'),
-        #                        )
-        # table_menu.add_command(label="属性",
-        #                        command=lambda: self.presenter.handler_on_show_property(
-        #                            table=self.table_calibrate, target='calibrate'),
-        #                        )
-        # self.table_calibrate.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
-        # self.table_calibrate.bind('<Double-1>', lambda e: self.presenter.handler_on_table_calibrate_edit(e))
-
+    def __show_property(self,e):
+        # 获取选中的单元格
+        selected_iid, selected_col, (x, y, w, h) =(
+            self.presenter.get_selected_cell_in_table(e=e, table=self.table_calibrate))
+        # 未选中单元格则退出
+        if not selected_iid or not selected_col:
+            return
+        # 若不是X或Y列则退出
+        if selected_col != 'X' and selected_col != 'Y':
+            return
+        # 获取数据项
+        idx = self.table_calibrate.get_children().index(selected_iid)
+        item = self.axis_pts[idx] if selected_col == 'X' else self.value_pts[idx]
+        SubPropertyView(master=self,
+                        obj=item,
+                        target='calibrate')
 
 # @singleton
 class MeasureView(tk.Toplevel, GetDpiMixIn):

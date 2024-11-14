@@ -1113,7 +1113,7 @@ class MeasureCtrl(object):
 
     def handler_on_table_calibrate_edit(self, e: tk.Event, table: ttk.Treeview):
         """
-        双击标定表格更改标定变量的值
+        双击标定表格进行标定
 
         :param e: 事件
         :type e: tk.Event
@@ -1122,8 +1122,8 @@ class MeasureCtrl(object):
         """
 
         # 获取选中的单元格
-        selected_iid, selected_col, (x, y, w, h) = (self.__get_selected_cell_in_table(e=e,
-                                                                                      table=table))
+        selected_iid, selected_col, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                    table=table))
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
             return
@@ -1303,7 +1303,7 @@ class MeasureCtrl(object):
             self.view.show_warning(msg)
             return
 
-    def handler_on_table_Curve_edit(self, e: tk.Event, table: ttk.Treeview):
+    def handler_on_table_curve_edit(self, e: tk.Event, table: ttk.Treeview):
         """
         双击标定表格更改Curve标定变量的值
 
@@ -1314,8 +1314,8 @@ class MeasureCtrl(object):
         """
 
         # 获取选中的单元格
-        selected_iid, selected_col, (x, y, w, h) = (self.__get_selected_cell_in_table(e=e,
-                                                                                      table=table))
+        selected_iid, selected_col, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                    table=table))
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
             return
@@ -1325,10 +1325,8 @@ class MeasureCtrl(object):
             return
         # 获取要标定的数据项
         idx = table.get_children().index(selected_iid)
-        if selected_col == 'X':
-            item = self.model.table_calibrate_axis_pts[idx]
-        elif selected_col == 'Y':
-            item = self.model.table_calibrate_value_pts[idx]
+        item = self.model.table_calibrate_axis_pts[idx]\
+            if selected_col == 'X' else self.model.table_calibrate_value_pts[idx]
         # if item.record_layout.address_type != 'DIRECT':
         #     msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
         #     self.text_log(msg, 'error')
@@ -1351,12 +1349,12 @@ class MeasureCtrl(object):
             self.view.show_warning(msg)
             return
 
-    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox, item: CalibrateItem):
+    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox | tk.Entry, item: CalibrateItem):
         """
-        验证标定数据数据符合规则后，执行标定任务
+        验证标定数据数据符合规则后，将数据写入ECU，并刷新数据及表格
 
         :param widget: 编辑控件
-        :type widget: ttk.Spinbox | ttk.Combobox
+        :type widget: ttk.Spinbox | ttk.Combobox | tk.Entry
         :param item: 标定数据项
         :type item: CalibrateItem
         """
@@ -2277,8 +2275,8 @@ class MeasureCtrl(object):
         return idx, table_item
 
     @staticmethod
-    def __get_selected_cell_in_table(e: tk.Event,
-                                     table: ttk.Treeview, ) -> tuple[str, str, tuple[int, int, int, int]]:
+    def get_selected_cell_in_table(e: tk.Event,
+                                   table: ttk.Treeview, ) -> tuple[str, str, tuple[int, int, int, int]]:
         """
         获取表格中选中的单元格，返回（iid，列名，几何位置）
 
