@@ -35,6 +35,15 @@ class NamedTupleDataType(NamedTuple):
     """
     用于描述基本数据类型
 
+    Attributes:
+        UBYTE (int): 无符号整型1字节
+        SBYTE (int): 有符号整型1字节
+        UWORD (int): 无符号整型2字节
+        SWORD (int): 有符号整型2字节
+        ULONG (int): 无符号整型4字节
+        SLONG (int): 有符号整型4字节
+        FLOAT32_IEEE (int): IEEE 32位浮点数
+        FLOAT64_IEEE (int): IEEE 64位浮点数
     """
     UBYTE: int = 1
     SBYTE: int = 1
@@ -50,35 +59,64 @@ class EnumAddrType(Enum):
     """
     用于描述表值或轴点值寻址的枚举
 
+    Attributes:
+        PBYTE (int): 相关内存位置有一个1字节指针指向该表值或轴点值
+        PWORD (int): 相关内存位置有一个2字节指针指向该表值或轴点值
+        PLONG (int): 相关内存位置有一个4字节指针指向该表值或轴点值
+        DIRECT (int): 相关的存储位置有第一个表格值或轴点值，所有其他存储位置均跟随递增地址
     """
-    PBYTE: int = 1  # 相关内存位置有一个1字节指针指向该表值或轴点值
-    PWORD: int = 2  # 相关内存位置有一个2字节指针指向该表值或轴点值
-    PLONG: int = 4  # 相关内存位置有一个4字节指针指向该表值或轴点值
-    DIRECT: int = 0  # 相关的存储位置具有第一个表格值或轴点值，所有其他存储位置均跟随递增地址
+    PBYTE: int = 1
+    PWORD: int = 2
+    PLONG: int = 4
+    DIRECT: int = 0
 
 
 class EnumByteOrder(Enum):
     """
     用于描述字节顺序的枚举
 
+    Attributes:
+        MSB_FIRST (int): 大端序
+        MSB_LAST (int): 小端序
     """
-    MSB_FIRST: int = 0  # big endian
-    MSB_LAST: int = 1  # little endian
+    MSB_FIRST: int = 0
+    MSB_LAST: int = 1
 
 
 class EnumIndexOrder(Enum):
     """
     用于描述轴点序列的枚举
 
+    Attributes:
+        INDEX_INCR (int): 随地址增加而增加索引
+        INDEX_DECR (int): 随地址增加而减少索引
     """
-    INDEX_INCR: int = 0  # 随地址增加而增加索引
-    INDEX_DECR: int = 1  # 随地址增加而减少索引
+    INDEX_INCR: int = 0
+    INDEX_DECR: int = 1
+
+
+class EnumIndexMode(Enum):
+    """
+    用于描述二维表值值映射到一维地址空间
+
+    Attributes:
+        COLUMN_DIR (int): 存放在列中
+        ROW_DIR (int): 存放在行中
+    """
+    COLUMN_DIR: int = 0
+    ROW_DIR: int = 1
 
 
 class EnumCalibrateType(Enum):
     """
     用于描述标定类型
 
+    Attributes:
+        VALUE (int): 标量
+        CURVE (int): 一维曲线
+        MAP (int): 二维映射
+        VAL_BLK (int): 数组
+        ASCII (int): 字符串
     """
     VALUE: int = 0
     CURVE: int = 1
@@ -91,12 +129,238 @@ class EnumConversionType(Enum):
     """
     用于描述转换方法类型
 
+    Attributes:
+        RAT_FUNC (int): 由可选的COEFFS关键字指定的公式转换
+        TAB_VERB (int): 文字转换表
+        TAB_INTP (int): 带插值的表
+        TAB_NOINTP (int): 无插值的表
+        FORM (int): 基于可选FORMULA关键字指定的公式转换
     """
-    TAB_INTP: int = 0 # 带插值的表
-    TAB_NOINTP: int = 1 # 无插值的表
-    TAB_VERB: int = 2  # 文字转换表
-    RAT_FUNC: int = 3  # 由可选的COEFFS关键字指定的公式转换
-    FORM: int= 4  # 基于可选FORMULA关键字指定的公式转换
+    RAT_FUNC: int = 0
+    TAB_VERB: int = 1
+    TAB_INTP: int = 2
+    TAB_NOINTP: int = 3
+    FORM: int= 4
+
+
+class EnumAxisType(Enum):
+    """
+    用于描述轴的类型
+
+    Attributes:
+        FIX_AXIS (int): 对于curve或map,其中包含未在EPROM中存放的虚拟轴点,
+            轴点可以根据关键字FIX_AXIS_PAR、FIX_AXIS_PAR_DIST和 FIX_AXIS_PAR_LIST定义的参数计算，轴点无法修改
+        COM_AXIS (int): curve或map的轴点值分组存放,必须由AXIS_PTS数据记录进行描述,
+            对此记录的引用与关键字AXIS_PTS_REF一起出现
+        RES_AXIS (int): 重新缩放轴,curve或map的轴点值分组存放,必须由AXIS_PTS数据记录进行描述,
+            对此记录的引用与关键字AXIS_PTS_REF一起出现
+        CURVE_AXIS (int): 曲线轴,此轴类型使用单独的CURVE CHARACTERISTIC重新缩放轴,
+            引用的CURVE用于查找轴索引,控制器使用索引值来确定CURVE或MAP中的操作点
+    """
+    FIX_AXIS: int = 0
+    COM_AXIS: int = 1
+    RES_AXIS: int = 2
+    CURVE_AXIS: int = 3
+
+
+##############################
+# Model API function declarations
+##############################
+
+@dataclass(slots=True)
+class FncValues(object):
+    """
+    用于描述标定对象的表值(函数值)如何存入内存，被RecordLayout对象引用
+
+    Attributes:
+        position (int): 轴点值的位置(数据记录中元素序列的描述)
+        data_type (NamedTupleDataType): 数据类型
+        index_mode (EnumIndexMode): 描述二维表值值映射到一维地址空间
+        address_type (EnumAddrType): 轴点寻址方式
+    """
+    position: int | None = None
+    data_type: NamedTupleDataType | None = None
+    index_mode: EnumIndexMode | None = None
+    address_type: EnumAddrType | None = None
+
+
+@dataclass(slots=True)
+class AxisPtsXYZ45(object):
+    """
+    用于描述轴点在内存中的存放位置，被RecordLayout对象引用
+
+    Attributes:
+        position (int): 轴点值的位置(数据记录中元素序列的描述)
+        data_type (NamedTupleDataType): 数据类型
+        index_order (EnumIndexOrder): 轴点序列，随着地址的增加而减少或增加索引
+        address_type (EnumAddrType): 轴点寻址方式
+    """
+    position: int | None = None
+    data_type: NamedTupleDataType | None = None
+    index_order: EnumIndexOrder | None = None
+    address_type: EnumAddrType | None = None
+
+
+@dataclass(slots=True)
+class RecordLayout:
+    """
+    用于指定内存中可调整对象的各种记录布局;
+    如果ALTERNATE选项与FNC_VALUES一起使用,则position参数将确定值和轴点的顺序
+
+    Attributes:
+        name (str): 名称
+        fnc_values (FncValues): 描述标定对象的表值(函数值)如何存入内存
+        axis_pts_x (AxisPtsXYZ45): 轴点在内存中的存放位置
+    """
+    name: str | None = None
+    # 可选
+    fnc_values: FncValues | None = None
+    axis_pts_x: AxisPtsXYZ45 | None = None
+
+
+@dataclass(slots=True)
+class TypeCompuVtab:
+    """
+    用于位模式可视化的转换表，被TypeConversion对象引用
+
+    Attributes:
+        name (str): 名称
+        long_identifier (str): 描述
+        number_value_pairs (int): 值对个数
+        read_dict (dict[int, str]): 读值时转换表
+        write_dict (dict[str, int]): 写值时转换表
+    """
+    name: str | None = None
+    long_identifier: str | None = None
+    number_value_pairs: int | None = None
+    read_dict: dict[int, str] | None = None
+    write_dict: dict[str, int] | None = None
+
+
+@dataclass(slots=True)
+class TypeConversion(object):
+    """
+    用于描述转换方法
+
+    Attributes:
+        name (str): 名称
+        long_identifier (str): 描述
+        conversion_type (EnumConversionType): 转换类型
+        format (str): %[length].[layout]，length表示总长度;layout表示小数位
+        unit (str): 物理单位
+        coeffs (tuple[float, float, float, float, float, float]): 有理函数的系数,raw_value = f(physical_value),
+            f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
+        compu_tab_ref (TypeCompuVtab): 对包含转化表的数据记录的引用,
+            只能引用COMPU_TAB、COMPU_VTAB或COMPU_VTAB_RANGE类型的对象
+    """
+
+    name: str | None = None
+    long_identifier: str | None = None
+    conversion_type: EnumConversionType | None = None
+    format: str | None = None
+    unit: str | None = None
+    # 可选
+    coeffs: tuple[float, float, float, float, float, float] | None = None
+    compu_tab_ref: TypeCompuVtab | None = None
+
+@dataclass(slots=True)
+class AxisPts:
+    """
+    用于处理轴点分布的参数规范,被AxisDescr对象引用
+
+    Attributes:
+        name (str): 名称
+        long_identifier (str): 描述
+        address (int): 内存地址
+        input_quantity (str): 输入数量,若未分配,则应设置为NO_INPUT_QUANTITY
+        record_layout (RecordLayout): 数据记录内存布局
+        max_diff (float): 值调整的最大浮点数
+        conversion (TypeConversion): 转换方法
+        max_axis_points (int): 最大轴点数
+        lower_limit (float): 物理值下限
+        upper_limit (float): 物理值上限
+    """
+    name: str | None = None
+    long_identifier: str | None = None
+    # cal_type: EnumCalibrateType | None = None
+    address: int | None = None
+    input_quantity: str | None = None
+    record_layout: RecordLayout | None = None
+    max_diff: float | None = None
+    conversion: TypeConversion | None = None
+    max_axis_points: int | None = None
+    lower_limit: float | None = None
+    upper_limit: float | None = None
+
+
+@dataclass(slots=True)
+class AxisDescr:
+    """
+    用于对标定对象中的轴描述
+
+    Attributes:
+        axis_type (EnumAxisType): 轴属性
+        input_quantity (str): 输入数量,若未分配,则应设置为NO_INPUT_QUANTITY
+        conversion (TypeConversion): 转换方法,若无,如CURVE_AXIS,则应设置为NO_COMPU_METHOD
+        max_axis_points (int): 最大轴点数
+        lower_limit (float): 物理值下限
+        upper_limit (float): 物理值上限
+        axis_pts_ref (AxisPts): 对AXIS_PTS记录的引用,用于轴点分布的描述
+    """
+    axis_type: EnumAxisType | None = None
+    input_quantity: str | None = None
+    conversion: TypeConversion | None = None
+    max_axis_points: int | None = None
+    lower_limit: float | None = None
+    upper_limit: float | None = None
+    # 可选
+    axis_pts_ref: AxisPts | None = None
+
+
+@dataclass(slots=True)
+class TypeCalibrate(object):
+    """
+    标定表格中的数据项类
+
+    Attributes:
+        name (str): 名称
+        long_identifier (str): 描述
+        cal_type (EnumCalibrateType): 标定类型
+        address (int): 内存地址
+        record_layout (RecordLayout): 数据记录内存布局
+        max_diff (float): 值调整的最大浮点数
+        conversion (TypeConversion): 转换方法
+        lower_limit (float): 物理值下限
+        upper_limit (float): 物理值上限
+        array_size (int): 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+        axis_descrs (list[AxisDescr]): 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+        value (str): 物理值
+        unit (str): 单位
+        data (bytes): value字段的原始数据序列
+        idx_in_table_calibrate_items (int): 当前对象在标定表格列表中的索引
+        idx_in_a2l_calibrations (int): 当前对象在A2L标定对象列表中的索引
+    """
+    name: str | None = None
+    long_identifier: str | None = None
+    cal_type: EnumCalibrateType | None = None
+    address: int | None = None
+    record_layout: RecordLayout | None = None
+    max_diff: float | None = None
+    conversion: TypeConversion | None = None
+    lower_limit: float | None = None
+    upper_limit: float | None = None
+
+    # 可选
+    array_size: int | None = None
+    axis_descrs: list[AxisDescr] | None = None
+
+    # 自定义
+    value: str | None = None
+    unit: str | None = None
+    data: bytes | None = None
+
+    idx_in_table_calibrate_items: int | None = None
+    idx_in_a2l_calibrations: int | None = None
 
 
 ##############################
@@ -314,113 +578,6 @@ class CalibrateItem(object):
     cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
     record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
     axis_refs: tuple[str] = ()  # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
-
-@dataclass(slots=True)
-class TypeConversion(object):
-    name: str # 名称
-    long_identifier: str # 描述
-    conversion_type: EnumConversionType # 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
-    format: str # %[length].[layout]，length表示总长度;layout表示小数位
-    unit: str # 物理单位
-    # 可选
-    # 有理函数的系数
-    # raw_value = f(physical_value);
-    # f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
-    coeffs: tuple[float, float, float, float, float, float] | None = None
-    # 指定转换表(引用COMPU_TAB数据记录)
-    compu_tab_ref: str | None = None
-
-
-@dataclass(slots=True)
-class TypeCalibrate(object):
-    """
-    标定表格中的数据项类
-
-    :param name: 标定对象名称
-    :type name: str
-    :param value: 物理值
-    :type value: str
-    :param unit: 单位
-    :type unit: str
-
-    :param idx_in_table_calibrate_items: 当前对象在标定表格列表中的索引
-    :type idx_in_table_calibrate_items: int
-    :param idx_in_a2l_calibrations: 当前对象在A2L标定对象列表中索引
-    :type idx_in_a2l_calibrations: int
-
-    :param data_type: 数据类型
-    :type data_type: str
-    :param conversion: 转换方法
-    :type conversion: str
-    :param conversion_type: 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
-    :type conversion_type: str
-    :param compu_tab_ref: 转换映射名称
-    :type compu_tab_ref: str
-    :param compu_vtab: 转换映射表
-    :type compu_vtab: dict[int,str]
-    :param coeffs: 转换系数(A,B,C,D,E,F)
-    :type coeffs: tuple[float, float, float, float, float, float]
-    :param format: 显示格式(整数位数，小数位数)
-    :type format: tuple[int, int]
-
-    :param data_size: 数据大小
-    :type data_size: int
-    :param data_addr: 数据地址
-    :type data_addr: str
-    :param lower_limit: 物理值下限
-    :type lower_limit: float
-    :param upper_limit: 物理值上限
-    :type upper_limit: float
-    :param data: value字段的原始数据序列
-    :type data: bytes
-
-    :param cal_type: 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
-    :type cal_type: str
-    :param record_layout: 标定变量的物理存储结构名称（一维，二维表，三维表等）
-    :type record_layout: RecordLayoutElement
-    """
-    name: str = ''  # 名称
-    long_identifier: str = ''  # 描述
-    cal_type: EnumCalibrateType = ''  # 标定类型
-    address: int = -1  # 内存地址
-    record_layout = None  # 数据记录内存布局
-    max_diff: float = None  # 值调整的最大浮点数
-    conversion: TypeConversion = None  # 转换方法
-    lower_limit: float = None  # 物理值下限
-    upper_limit: float = None  # 物理值上限
-
-    # 可选
-    axis_descrs = None  # 坐标轴描述,用于指定轴描述的参数(带有特征曲线和映射),第一个参数块描述X轴,第二个参数块描述Y轴
-
-    # 自定义
-    value: str = ''  # 物理值
-    unit: str = ''  # 单位
-
-    idx_in_table_calibrate_items: int = -1  # 当前对象在标定表格列表中的索引
-    idx_in_a2l_calibrations: int = -1  # 当前对象在A2L标定对象列表中索引
-
-    data_type: str = ''  # 数据类型
-    conversion: str = ''  # 转换方法名称
-    conversion_type: str = ''  # 转换类型(转换方法中的conversion_type属性，'RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
-    compu_tab_ref: str = ''  # 转换映射名称，若转换类型为TAB_VERB则存在
-    compu_vtab: dict[int, str] = None  # 转换映射表
-    coeffs: tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)，若转换类型为RAT_FUNC则存在
-    format: tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
-
-    data_size: int = -1  # 数据大小
-    data_addr: str = ''  # 数据地址
-    lower_limit: float = None  # 物理值下限
-    upper_limit: float = None  # 物理值上限
-    data: bytes = b''  # value字段的原始数据序列
-
-    cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
-    record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
-    axis_refs: tuple[str] = ()  # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
-
-
-##############################
-# Model API function declarations
-##############################
 
 # @singleton
 class MeasureModel(object):
