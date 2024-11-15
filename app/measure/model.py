@@ -11,8 +11,11 @@ from queue import Queue
 
 from tkinter import StringVar
 from dataclasses import dataclass
+from enum import Enum
+from typing import NamedTuple
 
-from xba2l.a2l_lib import Module, MemorySegment, Measurement, CompuMethod, CompuVtab, Characteristic, RecordLayout, AxisPts
+from xba2l.a2l_lib import Module, MemorySegment, Measurement, CompuMethod, CompuVtab, Characteristic, RecordLayout, \
+    AxisPts
 
 from eco import eco_pccp
 from srecord import Srecord
@@ -25,8 +28,81 @@ from utils import singleton
 
 
 ##############################
+# Type definitions
+##############################
+
+class NamedTupleDataType(NamedTuple):
+    """
+    用于描述基本数据类型
+
+    """
+    UBYTE: int = 1
+    SBYTE: int = 1
+    UWORD: int = 2
+    SWORD: int = 2
+    ULONG: int = 4
+    SLONG: int = 4
+    FLOAT32_IEEE: int = 4
+    FLOAT64_IEEE: int = 8
+
+
+class EnumAddrType(Enum):
+    """
+    用于描述表值或轴点值寻址的枚举
+
+    """
+    PBYTE: int = 1  # 相关内存位置有一个1字节指针指向该表值或轴点值
+    PWORD: int = 2  # 相关内存位置有一个2字节指针指向该表值或轴点值
+    PLONG: int = 4  # 相关内存位置有一个4字节指针指向该表值或轴点值
+    DIRECT: int = 0  # 相关的存储位置具有第一个表格值或轴点值，所有其他存储位置均跟随递增地址
+
+
+class EnumByteOrder(Enum):
+    """
+    用于描述字节顺序的枚举
+
+    """
+    MSB_FIRST: int = 0  # big endian
+    MSB_LAST: int = 1  # little endian
+
+
+class EnumIndexOrder(Enum):
+    """
+    用于描述轴点序列的枚举
+
+    """
+    INDEX_INCR: int = 0  # 随地址增加而增加索引
+    INDEX_DECR: int = 1  # 随地址增加而减少索引
+
+
+class EnumCalibrateType(Enum):
+    """
+    用于描述标定类型
+
+    """
+    VALUE: int = 0
+    CURVE: int = 1
+    MAP: int = 2
+    VAL_BLK: int = 3  # array of values
+    ASCII: int = 4  # string
+
+
+class EnumConversionType(Enum):
+    """
+    用于描述转换方法类型
+
+    """
+    TAB_INTP: int = 0 # 带插值的表
+    TAB_NOINTP: int = 1 # 无插值的表
+    TAB_VERB: int = 2  # 文字转换表
+    RAT_FUNC: int = 3  # 由可选的COEFFS关键字指定的公式转换
+    FORM: int= 4  # 基于可选FORMULA关键字指定的公式转换
+
+
+##############################
 # Model API function declarations
 ##############################
+
 @dataclass(slots=True)
 class RecordLayoutElement:
     """
@@ -45,12 +121,12 @@ class RecordLayoutElement:
     :param index_mode: 索引模式
     :type index_mode: str
     """
-    name: str = '' # 名称
-    type: str = '' # 类型，FNC_VALUES、AXIS_PTS_X
-    position: int = -1 # 位置
-    data_type: str = '' # 数据类型
-    address_type: str = '' # 寻址方式，DIRECT
-    index_mode: str = '' # 索引模式，COLUMN_DIR、INDEX_INCR、
+    name: str = ''  # 名称
+    type: str = ''  # 类型，FNC_VALUES、AXIS_PTS_X
+    position: int = -1  # 位置
+    data_type: str = ''  # 数据类型
+    address_type: str = ''  # 寻址方式，DIRECT
+    index_mode: str = ''  # 索引模式，COLUMN_DIR、INDEX_INCR、
 
 
 @dataclass(slots=True)
@@ -152,7 +228,7 @@ class MeasureItem(object):
     conversion: str = ''  # 转换方法
     conversion_type: str = ''  # 转换类型(转换方法中的conversion_type属性，'RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
     compu_tab_ref: str = ''  # 转换映射名称，若转换类型为TAB_VERB则存在
-    compu_vtab: dict[int,str] = None  # 转换映射表
+    compu_vtab: dict[int, str] = None  # 转换映射表
     coeffs: tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)，若转换类型为RAT_FUNC则存在
     format: tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
 
@@ -237,7 +313,109 @@ class CalibrateItem(object):
 
     cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
     record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
-    axis_refs: tuple[str] = () # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
+    axis_refs: tuple[str] = ()  # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
+
+@dataclass(slots=True)
+class TypeConversion(object):
+    name: str # 名称
+    long_identifier: str # 描述
+    conversion_type: EnumConversionType # 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
+    format: str # %[length].[layout]，length表示总长度;layout表示小数位
+    unit: str # 物理单位
+    # 可选
+    # 有理函数的系数
+    # raw_value = f(physical_value);
+    # f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
+    coeffs: tuple[float, float, float, float, float, float] | None = None
+    # 指定转换表(引用COMPU_TAB数据记录)
+    compu_tab_ref: str | None = None
+
+
+@dataclass(slots=True)
+class TypeCalibrate(object):
+    """
+    标定表格中的数据项类
+
+    :param name: 标定对象名称
+    :type name: str
+    :param value: 物理值
+    :type value: str
+    :param unit: 单位
+    :type unit: str
+
+    :param idx_in_table_calibrate_items: 当前对象在标定表格列表中的索引
+    :type idx_in_table_calibrate_items: int
+    :param idx_in_a2l_calibrations: 当前对象在A2L标定对象列表中索引
+    :type idx_in_a2l_calibrations: int
+
+    :param data_type: 数据类型
+    :type data_type: str
+    :param conversion: 转换方法
+    :type conversion: str
+    :param conversion_type: 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
+    :type conversion_type: str
+    :param compu_tab_ref: 转换映射名称
+    :type compu_tab_ref: str
+    :param compu_vtab: 转换映射表
+    :type compu_vtab: dict[int,str]
+    :param coeffs: 转换系数(A,B,C,D,E,F)
+    :type coeffs: tuple[float, float, float, float, float, float]
+    :param format: 显示格式(整数位数，小数位数)
+    :type format: tuple[int, int]
+
+    :param data_size: 数据大小
+    :type data_size: int
+    :param data_addr: 数据地址
+    :type data_addr: str
+    :param lower_limit: 物理值下限
+    :type lower_limit: float
+    :param upper_limit: 物理值上限
+    :type upper_limit: float
+    :param data: value字段的原始数据序列
+    :type data: bytes
+
+    :param cal_type: 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
+    :type cal_type: str
+    :param record_layout: 标定变量的物理存储结构名称（一维，二维表，三维表等）
+    :type record_layout: RecordLayoutElement
+    """
+    name: str = ''  # 名称
+    long_identifier: str = ''  # 描述
+    cal_type: EnumCalibrateType = ''  # 标定类型
+    address: int = -1  # 内存地址
+    record_layout = None  # 数据记录内存布局
+    max_diff: float = None  # 值调整的最大浮点数
+    conversion: TypeConversion = None  # 转换方法
+    lower_limit: float = None  # 物理值下限
+    upper_limit: float = None  # 物理值上限
+
+    # 可选
+    axis_descrs = None  # 坐标轴描述,用于指定轴描述的参数(带有特征曲线和映射),第一个参数块描述X轴,第二个参数块描述Y轴
+
+    # 自定义
+    value: str = ''  # 物理值
+    unit: str = ''  # 单位
+
+    idx_in_table_calibrate_items: int = -1  # 当前对象在标定表格列表中的索引
+    idx_in_a2l_calibrations: int = -1  # 当前对象在A2L标定对象列表中索引
+
+    data_type: str = ''  # 数据类型
+    conversion: str = ''  # 转换方法名称
+    conversion_type: str = ''  # 转换类型(转换方法中的conversion_type属性，'RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
+    compu_tab_ref: str = ''  # 转换映射名称，若转换类型为TAB_VERB则存在
+    compu_vtab: dict[int, str] = None  # 转换映射表
+    coeffs: tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)，若转换类型为RAT_FUNC则存在
+    format: tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
+
+    data_size: int = -1  # 数据大小
+    data_addr: str = ''  # 数据地址
+    lower_limit: float = None  # 物理值下限
+    upper_limit: float = None  # 物理值上限
+    data: bytes = b''  # value字段的原始数据序列
+
+    cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
+    record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
+    axis_refs: tuple[str] = ()  # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
 
 
 ##############################
@@ -258,7 +436,7 @@ class MeasureModel(object):
         'ULONG': 4,
         'SLONG': 4,
         'FLOAT32_IEEE': 4,
-        'FLOAT64_IEEE': 8 # 不支持，测量时此类型数据会被过滤掉
+        'FLOAT64_IEEE': 8  # 不支持，测量时此类型数据会被过滤掉
     }
 
     def __init__(self):
@@ -283,10 +461,10 @@ class MeasureModel(object):
         self.a2l_epk_addr: str = ''  # 存储A2L文件解析后的epk地址,16进制
         self.a2l_epk = ''  # 存储A2L文件解析后的epk
         self.a2l_module: Module = None  # 存储A2L文件解析后的模块对象
-        self.a2l_memory_code: MemorySegment = None # 存储A2L文件解析后的代码段内存段对象
-        self.a2l_memory_epk_data: MemorySegment = None # 存储A2L文件解析后的epk数据内存段对象
-        self.a2l_memory_ram_cal: MemorySegment = None # 存储A2L文件解析后的ram标定内存段对象
-        self.a2l_memory_rom_cal: MemorySegment = None # 存储A2L文件解析后的rom标定内存段对象
+        self.a2l_memory_code: MemorySegment = None  # 存储A2L文件解析后的代码段内存段对象
+        self.a2l_memory_epk_data: MemorySegment = None  # 存储A2L文件解析后的epk数据内存段对象
+        self.a2l_memory_ram_cal: MemorySegment = None  # 存储A2L文件解析后的ram标定内存段对象
+        self.a2l_memory_rom_cal: MemorySegment = None  # 存储A2L文件解析后的rom标定内存段对象
         self.a2l_measurements: list[Measurement] = []  # 存储A2L文件解析后的测量对象列表
         self.a2l_calibrations: list[Characteristic] = []  # 存储A2L文件解析后的标定对象列表
 
