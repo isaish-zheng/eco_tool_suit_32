@@ -23,16 +23,21 @@ import traceback  # 用于获取异常详细信息
 from typing import Union
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from setuptools.command.build_ext import if_dl
 from xba2l.a2l_base import Options as OptionsParseA2l  # 解析a2l文件
 from xba2l.a2l_lib import AxisPts
 from xba2l.a2l_util import parse_a2l  # 解析a2l文件
 
 from eco import eco_pccp
 from srecord import Srecord
-from tkui.tktypes import FONT_BUTTON
 from utils import singleton, pad_hex
 
-from .model import MeasureModel, SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement
+from .model import MeasureModel, \
+    SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement, \
+    ASAP2Calibrate, ASAP2RecordLayout, ASAP2CompuMethod, ASAP2AxisDescr, \
+    ASAP2FncValues, ASAP2AxisPtsXYZ45, ASAP2CompuVtab, ASAP2AxisPts, \
+    ASAP2EnumCalibrateType, ASAP2EnumDataType, ASAP2EnumConversionType, ASAP2EnumByteOrder, \
+    ASAP2EnumIndexMode,  ASAP2EnumAddrType, ASAP2EnumIndexOrder, ASAP2EnumAxisType
 from .view import tk, ttk, MeasureView, TkTreeView, SubPropertyView, SubCalibrateCurveView, SubCalibrateValueView
 from ..download.model import DownloadModel
 
@@ -161,7 +166,7 @@ class MeasureCtrl(object):
             # 保存操作表格数据
             with open(self.model.table_history_filepath, 'wb') as f:
                 monitor_data = {'table_measure_items': self.model.table_measure_items,
-                                'table_calibrate_items': self.model.table_calibrate_items,
+                                'table_calibrate_dict': self.model.table_calibrate_dict,
                                 'history_epk': self.model.a2l_epk}
                 pickle.dump(monitor_data, f)
         except Exception as e:
@@ -170,7 +175,7 @@ class MeasureCtrl(object):
 
     def deal_file(self) -> None:
         """
-        从数据模型中获取PGM和A2L文件路径，解析文件，显示文件信息，并将所需数据存储到视图的数据模型中
+        从数据模型中获取PGM和A2L文件路径，解析文件，显示文件信息，并将所需原始数据存储到视图的数据模型中
 
         """
         try:
@@ -224,26 +229,21 @@ class MeasureCtrl(object):
                 measurements = copy.deepcopy(list(measurements))
                 measurements.sort(key=lambda item: item.name)
                 self.model.a2l_measurements = measurements
-                # 获取a2l转换方法，保存到视图数据模型中
-                compu_methods = copy.deepcopy(module.compu_methods)
-                compu_methods.sort(key=lambda item: item.name)
-                self.model.a2l_conversions = compu_methods
-                # 获取a2l转换映射表
-                compu_vtabs = copy.deepcopy(module.compu_vtabs)
-                compu_vtabs.sort(key=lambda item: item.name)
-                self.model.a2l_compu_vtabs = compu_vtabs
 
                 # 获取a2l标定对象，保存到视图数据模型中
-                calibrations = module.characteristics
-                calibrations = copy.deepcopy(list(calibrations))
-                calibrations.sort(key=lambda item: item.name)
-                self.model.a2l_calibrations = calibrations
+                calibration_names = list(module.characteristic_dict.keys())
+                calibration_names.sort(key=lambda item: item)
+                self.model.a2l_calibration_dict.clear()
+                for name in calibration_names:
+                    self.model.a2l_calibration_dict[name] = copy.deepcopy(module.characteristic_dict[name])
                 # 获取a2l标定变量存储结构，保存到视图数据模型中
-                record_layouts = copy.deepcopy(module.record_layouts)
-                record_layouts.sort(key=lambda item: item.name)
-                self.model.a2l_record_layouts = record_layouts
-                # 获取a2l标定变量的轴类型，保存到视图数据模型中
-                self.model.a2l_axis_pts_dict = module.axis_pts_dict
+                self.model.a2l_record_layout_dict = copy.deepcopy(module.record_layout_dict)
+                # 获取a2l转换方法，保存到视图数据模型中
+                self.model.a2l_conversion_dict = copy.deepcopy(module.compu_method_dict)
+                # 获取a2l转换表
+                self.model.a2l_compu_vtab_dict = copy.deepcopy(module.compu_vtab_dict)
+                # 获取a2l轴类型参考
+                self.model.a2l_axis_pts_dict = copy.deepcopy(module.axis_pts_dict)
 
                 # 初始化测量选择表格数据项内容，保存到视图数据模型
                 self.model.table_select_measure_raw_items.clear()
@@ -256,9 +256,9 @@ class MeasureCtrl(object):
                 self.model.table_select_measure_filter_items = self.model.table_select_measure_raw_items
                 # 初始化标定选择表格数据项内容，保存到视图数据模型
                 self.model.table_select_calibrate_raw_items.clear()
-                for index in range(len(self.model.a2l_calibrations)):
+                for name in self.model.a2l_calibration_dict:
                     table_item = SelectCalibrateItem(is_selected='',
-                                                     name=self.model.a2l_calibrations[index].name,
+                                                     name=name,
                                                      is_selected_check='□')
                     self.model.table_select_calibrate_raw_items.append(table_item)
                 self.model.table_select_calibrate_filter_items = self.model.table_select_calibrate_raw_items
@@ -298,7 +298,7 @@ class MeasureCtrl(object):
                 with open(self.model.table_history_filepath, 'rb') as f:
                     monitor_data = pickle.load(f)
                     self.model.table_measure_items = monitor_data['table_measure_items']
-                    self.model.table_calibrate_items = monitor_data['table_calibrate_items']
+                    self.model.table_calibrate_dict = monitor_data['table_calibrate_dict']
                     self.model.history_epk = monitor_data['history_epk']
                     msg_his = (f"历史信息 -> 历史操作数据对象"
                                f"\n\thistory_epk -> {self.model.history_epk}"
@@ -324,7 +324,7 @@ class MeasureCtrl(object):
                 pass
             else:
                 self.model.table_measure_items.clear()
-                self.model.table_calibrate_items.clear()
+                self.model.table_calibrate_dict.clear()
 
             # 刷新
             # self.__flush_table_select()
@@ -417,14 +417,12 @@ class MeasureCtrl(object):
                                     obj=self.model.table_measure_items[names.index(name)],
                                     target='measure')
                 if target == 'calibrate' and selected_iids:
-                    names = [item.name for item in self.model.table_calibrate_items]
                     SubPropertyView(master=self.view,
-                                    obj=self.model.table_calibrate_items[names.index(name)],
+                                    obj=self.model.table_calibrate_dict[name],
                                     target='calibrate')
                 if target == 'select_calibrate' and selected_iids:
-                    names = [item.name for item in self.model.a2l_calibrations]
                     SubPropertyView(master=self.view,
-                                    obj=self.model.a2l_calibrations[names.index(name)],
+                                    obj=self.model.a2l_calibration_dict[name],
                                     target='calibrate')
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
@@ -594,13 +592,6 @@ class MeasureCtrl(object):
             return idx_map_list
 
         try:
-            # 获取转换方法名称列表
-            conversion_names = [conversion.name for conversion in self.model.a2l_conversions]
-            # 获取转换映射表名称列表
-            compu_vtab_names = [compu_vtab.name for compu_vtab in self.model.a2l_compu_vtabs]
-            # 获取标定变量存储结构名称列表
-            record_layout_names = [record_layout.name for record_layout in self.model.a2l_record_layouts]
-
             if target == 'all' or target == 'measure':
                 # 清空数据模型中测量数据项列表
                 self.model.table_measure_items.clear()
@@ -610,7 +601,7 @@ class MeasureCtrl(object):
                 # 添加被选择的数据项到测量表格
                 for item in selected_items:
                     measure_item = MeasureItem(name=item.name,
-                                               rate=item.is_selected_20ms == '√' and '20ms' or '100ms', )
+                                               rate=item.is_selected_20ms == '√' and '20ms' or '100ms')
                     self.model.table_measure_items.append(measure_item)
 
                 idx_map_list = _get_idx_map(target='measure')
@@ -619,7 +610,7 @@ class MeasureCtrl(object):
                     # 获取原始测量对象
                     obj_msr = self.model.a2l_measurements[idx_in_a2l]
                     # 索引属性
-                    self.model.table_measure_items[idx_in_table]. idx_in_table_measure_items = idx_in_table
+                    self.model.table_measure_items[idx_in_table].idx_in_table_measure_items = idx_in_table
                     self.model.table_measure_items[
                         idx_in_table].idx_in_a2l_measurements = idx_in_a2l
                     # 数据类型属性
@@ -628,26 +619,25 @@ class MeasureCtrl(object):
                     self.model.table_measure_items[idx_in_table].conversion = obj_msr.conversion
                     # 转换类型属性
                     self.model.table_measure_items[idx_in_table].conversion_type = (
-                        self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].conversion_type)
+                        self.model.a2l_conversion_dict[obj_msr.conversion].conversion_type)
                     # 转换映射名称属性
                     self.model.table_measure_items[idx_in_table].compu_tab_ref = (
-                        self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].compu_tab_ref)
+                        self.model.a2l_conversion_dict[obj_msr.conversion].compu_tab_ref)
                     # 转换映射表属性
                     # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
-                    if self.model.table_measure_items[idx_in_table].compu_tab_ref in compu_vtab_names:
+                    if self.model.table_measure_items[idx_in_table].compu_tab_ref in self.model.a2l_compu_vtab_dict:
                         self.model.table_measure_items[idx_in_table].compu_vtab = (
-                            self.model.a2l_compu_vtabs[
-                                compu_vtab_names.index(
-                                    self.model.table_measure_items[idx_in_table].compu_tab_ref)].read_dict)
+                            self.model.a2l_compu_vtab_dict[
+                                self.model.table_measure_items[idx_in_table].compu_tab_ref].read_dict)
 
                     # 单位属性
                     self.model.table_measure_items[idx_in_table].unit = (
-                        self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].unit)
+                        self.model.a2l_conversion_dict[obj_msr.conversion].unit)
                     # 转换系数
                     self.model.table_measure_items[idx_in_table].coeffs = (
-                        self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].coeffs)
+                        self.model.a2l_conversion_dict[obj_msr.conversion].coeffs)
                     # 显示格式
-                    fm = self.model.a2l_conversions[conversion_names.index(obj_msr.conversion)].format
+                    fm = self.model.a2l_conversion_dict[obj_msr.conversion].format
                     if '%' in fm:
                         fm = tuple(fm[1:].split('.'))
                         fm0 = int(fm[0])
@@ -670,99 +660,27 @@ class MeasureCtrl(object):
                 self.__flush_label_operate_number(target='measure')
                 self.handler_on_cancel_select(target='measure')
             if target == 'all' or target == 'calibrate':
-                # 清空数据模型中标定数据项列表
-                self.model.table_calibrate_items.clear()
                 # 筛选被选择的数据项，filter返回的是浅拷贝的迭代器，每次迭代的元素内容指向table_calibrate_raw_items列表中的元素内容
-                selected_items = filter(lambda item: item.is_selected,
-                                        self.model.table_select_calibrate_raw_items)
-                # 添加被选择的数据项到标定表格
-                for item in selected_items:
-                    calibrate_item = CalibrateItem(name=item.name)
-                    self.model.table_calibrate_items.append(calibrate_item)
-
-                idx_map_list = _get_idx_map(target='calibrate')
-                # 根据索引映射，从原始标定对象中获取对应标定数据项的属性
-                for idx_in_table, idx_in_a2l in idx_map_list:
-                    # 获取原始测量对象
-                    obj_cal = self.model.a2l_calibrations[idx_in_a2l]
-                    # 索引属性
-                    self.model.table_calibrate_items[idx_in_table].idx_in_table_calibrate_items = idx_in_table
-                    self.model.table_calibrate_items[
-                        idx_in_table].idx_in_a2l_calibrations = idx_in_a2l
-                    # 数据类型属性
-                    self.model.table_calibrate_items[idx_in_table].data_type = obj_cal.data_type
-                    # 转换方法属性
-                    self.model.table_calibrate_items[idx_in_table].conversion = obj_cal.conversion
-                    # 转换类型属性
-                    self.model.table_calibrate_items[idx_in_table].conversion_type = (
-                        self.model.a2l_conversions[conversion_names.index(obj_cal.conversion)].conversion_type)
-                    # 转换映射名称属性
-                    self.model.table_calibrate_items[idx_in_table].compu_tab_ref = (
-                        self.model.a2l_conversions[conversion_names.index(obj_cal.conversion)].compu_tab_ref)
-                    # 转换映射表属性
-                    # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
-                    if self.model.table_calibrate_items[idx_in_table].compu_tab_ref in compu_vtab_names:
-                        self.model.table_calibrate_items[idx_in_table].compu_vtab = (
-                            self.model.a2l_compu_vtabs[
-                                compu_vtab_names.index(
-                                    self.model.table_calibrate_items[idx_in_table].compu_tab_ref)].read_dict)
-
-                    # 单位属性
-                    self.model.table_calibrate_items[idx_in_table].unit = (
-                        self.model.a2l_conversions[conversion_names.index(obj_cal.conversion)].unit)
-                    # 转换系数
-                    self.model.table_calibrate_items[idx_in_table].coeffs = (
-                        self.model.a2l_conversions[conversion_names.index(obj_cal.conversion)].coeffs)
-                    # 显示格式
-                    fm = self.model.a2l_conversions[conversion_names.index(obj_cal.conversion)].format
-                    if '%' in fm:
-                        fm = tuple(fm[1:].split('.'))
-                        fm0 = int(fm[0])
-                        fm1 = int(fm[1])
-                        self.model.table_calibrate_items[idx_in_table].format = (fm0, fm1)
-
-                    # 数据大小属性
-                    self.model.table_calibrate_items[idx_in_table].data_size = self.model.ASAP2_TYPE_SIZE[
-                        obj_cal.data_type]
-                    # 数据地址属性
-                    self.model.table_calibrate_items[idx_in_table].data_addr = hex(obj_cal.address)
-                    # 物理值下限
-                    self.model.table_calibrate_items[idx_in_table].lower_limit = obj_cal.lower_limit
-                    # 物理值上限
-                    self.model.table_calibrate_items[idx_in_table].upper_limit = obj_cal.upper_limit
-
-                    # 标定变量类型属性
-                    self.model.table_calibrate_items[idx_in_table].cal_type = obj_cal.type
-                    # 标定变量存储结构
-                    record_layout = self.model.a2l_record_layouts[record_layout_names.index(obj_cal.record_layout)]
-                    self.model.table_calibrate_items[idx_in_table].record_layout = \
-                        RecordLayoutElement(name=record_layout.name,
-                                            type=record_layout.elements[0][0],
-                                            position=record_layout.elements[0][1].position,
-                                            data_type=record_layout.elements[0][1].data_type,
-                                            address_type=record_layout.elements[0][1].address_type,
-                                            index_mode=record_layout.elements[0][1].index_mode,)
-                    # 引用坐标轴的名称
-                    if obj_cal.axis_descrs:
-                        axis_refs = []
-                        for axis_descr in obj_cal.axis_descrs:
-                            axis_refs.append(axis_descr.axis_pts_ref)
-                        self.model.table_calibrate_items[idx_in_table].axis_refs = tuple(axis_refs)
+                selected_items = list(filter(lambda item: item.is_selected,
+                                        self.model.table_select_calibrate_raw_items))
+                names = [item.name for item in selected_items]
+                self.__assign_calibration_dict(tuple(names), self.model.table_calibrate_dict)
+                for item in self.model.table_calibrate_dict.values():
                     # 对于非VALUE类型的标定变量，如一维表、二维表，不能直接赋单个值
-                    if self.model.table_calibrate_items[idx_in_table].cal_type == 'VALUE':
+                    if item.cal_type.name == ASAP2EnumCalibrateType.VALUE.name:
                         # 获取原始值，将其转为物理值
                         rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                        offset = int(self.model.table_calibrate_items[idx_in_table].data_addr, 16) - rom_cal_addr
-                        length = self.model.table_calibrate_items[idx_in_table].data_size
+                        offset = item.address - rom_cal_addr
+                        length = ASAP2EnumDataType.get_size(item.record_layout.fnc_values.data_type.name)
                         raw_data =(self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
                                                                                      length=length))
-                        self.model.table_calibrate_items[idx_in_table].data = raw_data
-                        value = self.__get_physical_value(item=self.model.table_calibrate_items[idx_in_table],
+                        item.data = raw_data
+                        value = self.__get_physical_value(item=item,
                                                           raw_data=raw_data)
-                        self.model.table_calibrate_items[idx_in_table].value = value
+                        item.value = value
                     else:
-                        self.model.table_calibrate_items[idx_in_table].data = b''
-                        self.model.table_calibrate_items[idx_in_table].value = '双击进行标定'
+                        item.data = b''
+                        item.value = '双击进行标定'
                 # 刷新
                 self.__flush_table_operate(target='calibrate')
                 self.__flush_label_operate_number(target='calibrate')
@@ -807,12 +725,12 @@ class MeasureCtrl(object):
                 # 获取所有原始数据项的名字
                 calibrate_raw_item_names = [item.name for item in self.model.table_select_calibrate_raw_items]
                 # 将标定表格数据项状态写入到原始数据项的状态
-                for calibrate_item in self.model.table_calibrate_items:
+                for k, v in self.model.table_calibrate_dict.items():
                     table_item = SelectCalibrateItem(is_selected='★',
-                                                     name=calibrate_item.name,
+                                                     name=k,
                                                      is_selected_check='√')
                     # 获取标定数据项名字在原始数据项列表中索引
-                    idx = calibrate_raw_item_names.index(calibrate_item.name)
+                    idx = calibrate_raw_item_names.index(k)
                     # 更新原始数据项内容
                     self.model.table_select_calibrate_raw_items[idx] = table_item
                 # 刷新
@@ -861,8 +779,7 @@ class MeasureCtrl(object):
             if selected_item_iids:
                 for iid in selected_item_iids:
                     name = self.view.table_calibrate.item(iid, "values")[column_names.index("Name")]
-                    calibrate_items_names = [item.name for item in self.model.table_calibrate_items]
-                    self.model.table_calibrate_items.pop(calibrate_items_names.index(name))
+                    self.model.table_calibrate_dict.pop(name)
             # 刷新
             self.handler_on_cancel_select(target='calibrate')
             self.handler_on_ack_select(target='calibrate') # 更新表格及表格数据项
@@ -1122,20 +1039,167 @@ class MeasureCtrl(object):
         """
 
         # 获取选中的单元格
-        selected_iid, selected_col, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+        try:
+            selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                        table=table))
+            # 未选中单元格则退出
+            if not selected_iid or not selected_col:
+                return
+            print(f"selected_col:{selected_col}")
+            # 若不是修改Value列则退出
+            if selected_col != 'Value':
+                return
+            # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
+            cal_item = self.model.table_calibrate_dict[selected_name]
+            # 根据标定类型进行相应处理
+            if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
+                SubCalibrateValueView(master=table,
+                                      item=cal_item,
+                                      geometry=(x,y,w,h),
+                                      presenter=self)
+            elif cal_item.cal_type == ASAP2EnumCalibrateType.CURVE:
+                # 标定对象存储字典
+                value_calibrate_dict: dict[str, ASAP2Calibrate] = {}
+                axis_calibrate_dict: dict[str, ASAP2Calibrate] = {}
+
+                # 获取X轴的信息
+                axis_pts_ref = cal_item.axis_descrs[0].axis_pts_ref
+                # 获取轴的点数
+                sum_pts = axis_pts_ref.max_axis_points
+
+                for idx in range(sum_pts):
+                    #############################################################################
+                    # 值数据对象
+                    #############################################################################
+                    value_calibrate = copy.deepcopy(cal_item)
+                    value_calibrate.name += f"_Y({idx})" # 名称
+                    # value_calibrate.long_identifier = value_calibrate.long_identifier # 描述
+                    value_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE # 标定类型
+                    value_calibrate.address = (cal_item.address +
+                                               idx * ASAP2EnumDataType.get_size(
+                                cal_item.record_layout.fnc_values.data_type.name))  # 数据地址
+                    # value_calibrate.record_layout = value_calibrate.record_layout # 数据记录内存布局
+                    # value_calibrate.max_diff = value_calibrate.max_diff # 值调整的最大浮点数
+                    # value_calibrate.conversion = value_calibrate.conversion # 转换方法
+                    # value_calibrate.lower_limit = value_calibrate.lower_limit # 物理值下限
+                    # value_calibrate.upper_limit = value_calibrate.upper_limit # 物理值上限
+                    value_calibrate.array_size = None # 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+                    value_calibrate.axis_descrs = None # 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+
+                    # 获取原始值，将其转为物理值
+                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                    offset = value_calibrate.address - rom_cal_addr
+                    length = ASAP2EnumDataType.get_size(value_calibrate.record_layout.fnc_values.data_type.name)
+                    raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                  length=length))
+                    value_calibrate.data = raw_data # value字段的原始数据序列
+                    value = self.__get_physical_value(item=value_calibrate,
+                                                      raw_data=raw_data)
+                    value_calibrate.value = value # 物理值
+                    # 添加数据项
+                    value_calibrate_dict[value_calibrate.name] = value_calibrate
+
+                    #############################################################################
+                    # 轴数据对象
+                    #############################################################################
+                    axis_item = cal_item.axis_descrs[0].axis_pts_ref
+                    axis_calibrate = copy.deepcopy(cal_item)
+                    axis_calibrate.name = axis_item.name + f"_X({idx})"  # 名称
+                    axis_calibrate.long_identifier = axis_item.long_identifier  # 描述
+                    axis_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE  # 标定类型
+                    axis_calibrate.address = (axis_item.address +
+                                               idx * ASAP2EnumDataType.get_size(
+                                axis_item.record_layout.axis_pts_x.data_type.name))  # 数据地址
+
+                    # 数据记录内存布局
+                    fnc_values = ASAP2FncValues(
+                        position=axis_item.record_layout.axis_pts_x.position,
+                        data_type=axis_item.record_layout.axis_pts_x.data_type,
+                        index_mode=value_calibrate.record_layout.fnc_values.index_mode,
+                        address_type=axis_item.record_layout.axis_pts_x.address_type)
+                    # ->轴点内存布局
+                    axis_pts_x = None
+                    axis_calibrate.record_layout = ASAP2RecordLayout(name=None,
+                                                                     fnc_values=fnc_values,
+                                                                     axis_pts_x=axis_pts_x)  # 数据记录内存布局
+                    axis_calibrate.max_diff = axis_item.max_diff  # 值调整的最大浮点数
+                    axis_calibrate.conversion = axis_item.conversion  # 转换方法
+                    axis_calibrate.lower_limit = axis_item.lower_limit  # 物理值下限
+                    axis_calibrate.upper_limit = axis_item.upper_limit  # 物理值上限
+                    axis_calibrate.array_size = None  # 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+                    axis_calibrate.axis_descrs = None  # 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+
+                    # 获取原始值，将其转为物理值
+                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                    offset = axis_calibrate.address - rom_cal_addr
+                    length = ASAP2EnumDataType.get_size(axis_calibrate.record_layout.fnc_values.data_type.name)
+                    raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                  length=length))
+                    axis_calibrate.data = raw_data  # value字段的原始数据序列
+                    value = self.__get_physical_value(item=axis_calibrate,
+                                                      raw_data=raw_data)
+                    axis_calibrate.value = value  # 物理值
+                    # 添加数据项
+                    axis_calibrate_dict[axis_calibrate.name] = axis_calibrate
+
+                print('一维表')
+                # 存储到数据模型
+                self.model.table_calibrate_axis_dict = axis_calibrate_dict
+                self.model.table_calibrate_value_dict = value_calibrate_dict
+                # 打开标定界面
+                self.__curve_view = SubCalibrateCurveView(master=self.view,
+                                                          axis_calibrate_dict=axis_calibrate_dict,
+                                                          value_calibrate_dict=value_calibrate_dict,
+                                                          presenter=self)
+                # 显示物理值到界面
+                name = list(axis_calibrate_dict.keys())[0]
+                x_name = name[0:name.find('_X(0)')]
+                values = [item.value for item in axis_calibrate_dict.values()]
+                self.__curve_view.table_calibrate.insert(
+                    parent="", index="end", text=x_name, values=values)
+                name = list(value_calibrate_dict.keys())[0]
+                y_name = name[0:name.find('_Y(0)')]
+                values = [item.value for item in value_calibrate_dict.values()]
+                self.__curve_view.table_calibrate.insert(
+                    parent="", index="end", text=y_name, values=values)
+                return
+
+            elif cal_item.cal_type == ASAP2EnumCalibrateType.MAP:
+                print('二维表')
+                return
+            else:
+                msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+                return
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
+
+    def handler_on_table_curve_edit(self, e: tk.Event, table: ttk.Treeview):
+        """
+        双击标定表格更改Curve标定变量的值
+
+        :param e: 事件
+        :type e: tk.Event
+        :param table: 表格
+        :type table: ttk.Treeview
+        """
+
+        # 获取选中的单元格
+        selected_iid, selected_col, name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
                                                                                     table=table))
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
             return
         print(f"selected_col:{selected_col}")
-        # 若不是修改Value列则退出
-        if selected_col != 'Value':
+        # 若不是修改X或Y列则退出
+        if selected_col != 'X' and selected_col != 'Y':
             return
-        # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
-        _, item = self.__iid2idx_in_table(iid=selected_iid,
-                                          table_widget=table,
-                                          raw_items=self.model.table_calibrate_items)
-
+        # 获取要标定的数据项
+        if selected_col == 'X':
+            names = list(self.model.table_calibrate_axis_dict.keys())
+            item = self.model.table_calibrate_axis_dict[names]
         if item.record_layout.address_type != 'DIRECT':
             msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
             self.text_log(msg, 'error')
@@ -1152,229 +1216,38 @@ class MeasureCtrl(object):
                                   item=item,
                                   geometry=(x,y,w,h),
                                   presenter=self)
-        elif item.cal_type == 'CURVE':
-            try:
-                if not item.axis_refs:
-                    return
-
-                value_pts: list[CalibrateItem] = []
-                axis_pts: list[CalibrateItem] = []
-
-                # 获取轴的信息
-                axis_info:AxisPts = self.model.a2l_axis_pts_dict[item.axis_refs[0]]
-                # 获取轴的点数
-                sum_pts = axis_info.max_axis_points
-
-                # 获取转换方法名称列表
-                conversion_names = [conversion.name for conversion in self.model.a2l_conversions]
-                # 获取转换映射表名称列表
-                compu_vtab_names = [compu_vtab.name for compu_vtab in self.model.a2l_compu_vtabs]
-                # 获取标定变量存储结构名称列表
-                record_layout_names = [record_layout.name for record_layout in self.model.a2l_record_layouts]
-
-                for idx in range(sum_pts):
-                    #############################################################################
-                    # 值数据对象
-                    #############################################################################
-                    # 深拷贝数据项
-                    value_pt = copy.deepcopy(item)
-
-                    # 修正数据项的属性
-                    value_pt.name += f"_Y({idx})" # 名称
-                    value_pt.idx_in_table_calibrate_items = -1 # 当前对象在标定表格列表中的索引
-                    value_pt.idx_in_a2l_calibrations = -1 # 当前对象在A2L标定对象列表中索引
-                    value_pt.data_addr = hex(int(item.data_addr, 16) + idx * item.data_size) # 数据地址
-                    value_pt.cal_type = 'VALUE' # 标定变量类型
-                    value_pt.axis_refs = () # 引用的坐标轴名称
-                    # 获取原始值，将其转为物理值
-                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                    offset = int(value_pt.data_addr, 16) - rom_cal_addr
-                    length = value_pt.data_size
-                    raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
-                                                                                  length=length))
-                    value_pt.data = raw_data
-                    value = self.__get_physical_value(item=value_pt,
-                                                      raw_data=raw_data)
-                    value_pt.value = value
-                    # 添加数据项
-                    value_pts.append(value_pt)
-
-                    #############################################################################
-                    # 轴数据对象
-                    #############################################################################
-                    # 创建轴数据点
-                    axis_pt = CalibrateItem(name=axis_info.name+f"_X({idx})")
-                    # 索引属性
-                    axis_pt.idx_in_table_calibrate_items = -1
-                    axis_pt.idx_in_a2l_calibrations = -1
-                    # 数据类型属性
-                    axis_pt.data_type = axis_info.data_type
-                    # 转换方法属性
-                    axis_pt.conversion = axis_info.conversion
-                    # 转换类型属性
-                    axis_pt.conversion_type = (
-                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].conversion_type)
-                    # 转换映射名称属性
-                    axis_pt.compu_tab_ref = (
-                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].compu_tab_ref)
-                    # 转换映射表属性
-                    # 对于数值类型没有转换映射表，所以先确定转换映射名称存在，再获取转换映射表
-                    if axis_pt.compu_tab_ref in compu_vtab_names:
-                        axis_pt.compu_vtab = (
-                            self.model.a2l_compu_vtabs[compu_vtab_names.index(axis_pt.compu_tab_ref)].read_dict)
-                    # 单位属性
-                    axis_pt.unit = (
-                            self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].unit)
-                    # 转换系数
-                    axis_pt.coeffs = (
-                        self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].coeffs)
-                    # 显示格式
-                    fm = self.model.a2l_conversions[conversion_names.index(axis_pt.conversion)].format
-                    if '%' in fm:
-                        fm = tuple(fm[1:].split('.'))
-                        fm0 = int(fm[0])
-                        fm1 = int(fm[1])
-                        axis_pt.format = (fm0, fm1)
-                    # 数据大小属性
-                    axis_pt.data_size = self.model.ASAP2_TYPE_SIZE[axis_pt.data_type]
-                    # 数据地址属性
-                    axis_pt.data_addr = hex(axis_info.address + idx * axis_pt.data_size) # 数据地址
-                    # 物理值下限
-                    axis_pt.lower_limit = axis_info.lower_limit
-                    # 物理值上限
-                    axis_pt.upper_limit = axis_info.upper_limit
-                    # 标定变量类型属性
-                    axis_pt.cal_type = 'VALUE'
-                    # 标定变量存储结构
-                    record_layout = self.model.a2l_record_layouts[record_layout_names.index(axis_info.record_layout)]
-                    axis_pt.record_layout = \
-                        RecordLayoutElement(name=record_layout.name,
-                                            type=record_layout.elements[0][0],
-                                            position=record_layout.elements[0][1].position,
-                                            data_type=record_layout.elements[0][1].data_type,
-                                            address_type=record_layout.elements[0][1].addressing,
-                                            index_mode=record_layout.elements[0][1].index_incr,
-                                            )
-                    # 引用坐标轴的名称
-                    axis_pt.axis_refs = ()
-                    # 对于非VALUE类型的标定变量，如一维表、二维表，不能直接赋单个值
-                    if axis_pt.cal_type == 'VALUE':
-                        # 获取原始值，将其转为物理值
-                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                        offset = int(axis_pt.data_addr, 16) - rom_cal_addr
-                        length = axis_pt.data_size
-                        raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
-                                                                                      length=length))
-                        axis_pt.data = raw_data
-                        value = self.__get_physical_value(item=axis_pt,
-                                                          raw_data=raw_data)
-                        axis_pt.value = value
-                    # 添加数据项
-                    axis_pts.append(axis_pt)
-
-                print('一维表')
-
-                self.__curve_view = SubCalibrateCurveView(master=self.view,
-                                                          axis_pts=axis_pts,
-                                                          value_pts=value_pts,
-                                                          presenter=self)
-
-                for idx in range(sum_pts):
-                    values = (idx,
-                              axis_pts[idx].value,
-                              value_pts[idx].value,)
-                    self.__curve_view.table_calibrate.insert(parent="",
-                                                             index="end",
-                                                             text="",
-                                                             values=values)
-
-                self.model.table_calibrate_axis_pts = axis_pts
-                self.model.table_calibrate_value_pts = value_pts
-                return
-            except Exception as e:
-                self.text_log(f'发生异常 {e}', 'error')
-                self.text_log(f"{traceback.format_exc()}", 'error')
-        elif item.cal_type == 'MAP':
-            print('二维表')
-            return
         else:
             msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
 
-    def handler_on_table_curve_edit(self, e: tk.Event, table: ttk.Treeview):
-        """
-        双击标定表格更改Curve标定变量的值
-
-        :param e: 事件
-        :type e: tk.Event
-        :param table: 表格
-        :type table: ttk.Treeview
-        """
-
-        # 获取选中的单元格
-        selected_iid, selected_col, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
-                                                                                    table=table))
-        # 未选中单元格则退出
-        if not selected_iid or not selected_col:
-            return
-        print(f"selected_col:{selected_col}")
-        # 若不是修改X或Y列则退出
-        if selected_col != 'X' and selected_col != 'Y':
-            return
-        # 获取要标定的数据项
-        idx = table.get_children().index(selected_iid)
-        item = self.model.table_calibrate_axis_pts[idx]\
-            if selected_col == 'X' else self.model.table_calibrate_value_pts[idx]
-        # if item.record_layout.address_type != 'DIRECT':
-        #     msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
-        #     self.text_log(msg, 'error')
-        #     self.view.show_warning(msg)
-        #     return
-        # if item.record_layout.index_mode != 'COLUMN_DIR':
-        #     msg = f"尚未支持{item.name}的类型(顺序存储类型{item.record_layout.index_mode})"
-        #     self.text_log(msg, 'error')
-        #     self.view.show_warning(msg)
-        #     return
-
-        if item.cal_type == 'VALUE':
-            SubCalibrateValueView(master=table,
-                                  item=item,
-                                  geometry=(x,y,w,h),
-                                  presenter=self)
-        else:
-            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
-
-    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox | tk.Entry, item: CalibrateItem):
+    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox | tk.Entry, item: ASAP2Calibrate):
         """
         验证标定数据数据符合规则后，将数据写入ECU，并刷新数据及表格
 
         :param widget: 编辑控件
         :type widget: ttk.Spinbox | ttk.Combobox | tk.Entry
         :param item: 标定数据项
-        :type item: CalibrateItem
+        :type item: ASAP2Calibrate
         """
-        def _calibrate(item: CalibrateItem, value: str) -> None:
+        def _calibrate(item: ASAP2Calibrate, value: str) -> None:
             """
             修改值
 
             :param item: 标定数据项
-            :type item: CalibrateItem
+            :type item: ASAP2Calibrate
             :param value: 标定值(字符串显示形式,对于映射为显示名称)
             :type value: str
             """
-            def _callback(future, item: CalibrateItem, value: str, data: bytes):
+            def _callback(future, item: ASAP2Calibrate, value: str, data: bytes):
                 """
                 线程执行结束的回调函数，执行成功则标定数据显示，刷新程序标定区
 
                 :param future: 线程执行结束返回的future对象
                 :type future: concurrent.futures.Future
                 :param item: 标定数据项
-                :type item: CalibrateItem
+                :type item: ASAP2Calibrate
                 :param value: 标定值(数字字符串显示形式,对于映射则为显示名称)
                 :type value: str
                 :param data: 标定数据序列(大端)
@@ -1388,8 +1261,7 @@ class MeasureCtrl(object):
                     if future.result():
                         self.text_log(f'修改成功', 'done')
                         rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                        addr = int(self.model.table_calibrate_items[item.idx_in_table_calibrate_items].data_addr,
-                                   16) - rom_cal_addr
+                        addr = item.address - rom_cal_addr
                         item.value = value # 更新单元格为标定后的值
                         item.data = data
                         self.__flush_table_operate(target='calibrate')
@@ -1406,7 +1278,7 @@ class MeasureCtrl(object):
                 rom_cal_addr = self.model.a2l_memory_rom_cal.address
                 ram_cal_addr = self.model.a2l_memory_ram_cal.address
                 # 计算标定地址和标定值
-                addr = ram_cal_addr + int(item.data_addr, 16) - rom_cal_addr
+                addr = ram_cal_addr + item.address - rom_cal_addr
                 val, data = self.__get_raw_data(item=item,
                                                 physical_value=value)
                 if val is None or data is None:
@@ -1419,7 +1291,7 @@ class MeasureCtrl(object):
                        f"\n\t标定物理值->{val},"
                        f"\n\t标定原始值->0x{data.hex()},"
                        f"\n\t地址->{hex(addr)},"
-                       f"\n\t数据类型->{item.data_type}")
+                       f"\n\t数据类型->{item.record_layout.fnc_values.data_type}")
                 self.text_log(msg)
                 if item.data == data:
                     self.text_log(f'标定值未变化，无需修改', 'warning')
@@ -1448,9 +1320,9 @@ class MeasureCtrl(object):
                 self.view.show_warning(msg)
                 return
             # 格式化
-            fm = item.format
+            fm = item.conversion.format[1:]
             if fm:
-                text = f"{float(text): <{fm[0]}.{fm[1]}f}"
+                text = f"{float(text): <{fm}f}"
             # 验证是否在指定范围内
             if float(text) - upper_limit > 1E-6 or \
                     float(text) - lower_limit < -1e-6:
@@ -1742,10 +1614,10 @@ class MeasureCtrl(object):
             # 清空所有数据项
             self.view.table_calibrate.delete(*self.view.table_calibrate.get_children())
             # 刷新显示标定表
-            for table_item in self.model.table_calibrate_items:
-                values = (table_item.name,
-                          table_item.value,
-                          table_item.unit)
+            for k, v in self.model.table_calibrate_dict.items():
+                values = (k,
+                          v.value,
+                          v.conversion.unit)
                 self.view.table_calibrate.insert(parent="",
                                                  index="end",
                                                  text="",
@@ -1777,14 +1649,14 @@ class MeasureCtrl(object):
         :type target: str
         """
         if target == 'all' or target == 'measure':
-            measure_num = len([item for item in self.model.table_measure_items])
+            measure_num = len(self.model.table_measure_items)
             self.view.label_measure_number.config(text=measure_num)
         if target == 'all' or target == 'calibrate':
-            calibrate_num = len([item for item in self.model.table_calibrate_items])
+            calibrate_num = len(self.model.table_calibrate_dict)
             self.view.label_calibrate_number.config(text=calibrate_num)
 
     def __get_physical_value(self,
-                             item: MeasureItem | CalibrateItem,
+                             item: MeasureItem | ASAP2Calibrate,
                              raw_data: Union[list[int], bytes, bytearray]) -> str:
         """
         根据原始值字节序列，求其物理值;
@@ -1798,161 +1670,202 @@ class MeasureCtrl(object):
         :return: 物理值(数字字符串显示形式，映射则为名称)
         :rtype: str
         """
-
-        # def _solve_data(item: MeasureItem, raw_data: List[int], signed: bool):
-        #     """
-        #     根据元素的字节序列，求BYTE、WORD、LONG基类型的物理值
-        #     :param item: 测量数据项
-        #     :param raw_data: 字节序列
-        #     :param signed: 数据的符号,True:有符号；False:无符号
-        #     :return: 物理值(str)
-        #     """
-        #
-        #     # 转换系数
-        #     A, B, C, D, E, F = item.coeffs
-        #     # 转换函数
-        #     x = Symbol('x')
-        #     fx = (A * x * x + B * x + C) / (D * x * x + E * x + F)
-        #
-        #     raw_value = int.from_bytes(bytes(raw_data), 'big', signed=signed)  # 原始值
-        #     if 'fix' in item.conversion:
-        #         eq = Eq(fx, raw_value)  # 创建等式
-        #         res_value = solve(eq, x)[0]  # 求解等式得到物理值
-        #     else:
-        #         res_value = raw_value
-        #     return res_value
-
-        # 根据不同类型和转换方法求解物理值
-
-        value = '!ParseError'
-        if item.data_type == 'UBYTE':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
-        elif item.data_type == 'SBYTE':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
-        elif item.data_type == 'UWORD':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
-        elif item.data_type == 'SWORD':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
-        elif item.data_type == 'ULONG':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
-        elif item.data_type == 'SLONG':
-            raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
-        elif item.data_type == 'FLOAT32_IEEE':
-            # 确保bytes的长度与浮点数的字节数对应。
-            # 对于32位浮点数，使用'f'；
-            # 对于64位浮点数，使用'd'。
-            # 如果bytes表示的是大端序，可以使用'!'作为格式字符串的前缀来指定字节顺序。
-            raw_value = unpack('!f', bytes(raw_data))[0]
-        else:
-            msg = f"无法解析{item.name}的物理值,尚未支持类型{item.data_type}"
-            self.text_log(msg, 'error')
-            return value
-
-        # 若是转换类型为映射表
-        if item.conversion_type == "TAB_VERB":
-            if raw_value in item.compu_vtab:
-                value = raw_value
-                return ''.join(
-                    [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
+        if isinstance(item, MeasureItem):
+            # 根据不同类型和转换方法求解物理值
+            value = '!ParseError'
+            data_type = item.data_type
+            if data_type == 'UBYTE':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == 'SBYTE':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == 'UWORD':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == 'SWORD':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == 'ULONG':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == 'SLONG':
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == 'FLOAT32_IEEE':
+                # 确保bytes的长度与浮点数的字节数对应。
+                # 对于32位浮点数，使用'f'；
+                # 对于64位浮点数，使用'd'。
+                # 如果bytes表示的是大端序，可以使用'!'作为格式字符串的前缀来指定字节顺序。
+                raw_value = unpack('!f', bytes(raw_data))[0]
             else:
-                msg = f"无法解析{item.name}的物理值,{raw_value}的映射不存在"
+                msg = f"无法解析{item.name}的物理值,尚未支持类型{data_type}"
                 self.text_log(msg, 'error')
                 return value
-        # 若是转换类型为普通数值(线性转换)
-        elif item.conversion_type == "RAT_FUNC":
-            # raw_value = f(physical_value);
-            # f(x) = B*x + C;
-            value = (raw_value - item.coeffs[2]) / item.coeffs[1]
-        else:
-            msg = f"无法解析{item.name}的物理值,尚未支持类型{item.conversion_type}"
-            self.text_log(msg, 'error')
-            return value
-        # 格式化
-        fm = item.format
-        if fm:
-            value = f"{value: <{fm[0]}.{fm[1]}f}"
-        # 返回
-        return value.strip()
+
+            # 若是转换类型为映射表
+            conversion_type = item.conversion_type
+            if conversion_type == 'TAB_VERB':
+                if raw_value in item.compu_vtab.keys():
+                    value = raw_value
+                    return ''.join(
+                        [item.compu_vtab[value], ':',
+                         pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[data_type])])
+                else:
+                    msg = f"无法解析{item.name}的物理值,{raw_value}的映射不存在"
+                    self.text_log(msg, 'error')
+                    return value
+            # 若是转换类型为普通数值(线性转换)
+            elif conversion_type == 'RAT_FUNC':
+                # raw_value = f(physical_value);
+                # f(x) = B*x + C;
+                coeffs = item.coeffs
+                value = (raw_value - coeffs[2]) / coeffs[1]
+            else:
+                msg = f"无法解析{item.name}的物理值,尚未支持类型{conversion_type}"
+                self.text_log(msg, 'error')
+                return value
+            # 格式化
+            fm = item.format  # 去掉%,%8.2->8.2
+            if fm:
+                value = f"{value: <{fm[0]}.{fm[1]}f}"
+            # 返回
+            return value.strip()
+
+        elif isinstance(item, ASAP2Calibrate):
+            # 根据不同类型和转换方法求解物理值
+            value = '!ParseError'
+            data_type = item.record_layout.fnc_values.data_type
+            if data_type == ASAP2EnumDataType.UBYTE:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == ASAP2EnumDataType.SBYTE:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == ASAP2EnumDataType.UWORD:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == ASAP2EnumDataType.SWORD:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == ASAP2EnumDataType.ULONG:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=False)  # 原始值
+            elif data_type == ASAP2EnumDataType.SLONG:
+                raw_value = int.from_bytes(bytes(raw_data), 'big', signed=True)  # 原始值
+            elif data_type == ASAP2EnumDataType.FLOAT32_IEEE:
+                # 确保bytes的长度与浮点数的字节数对应。
+                # 对于32位浮点数，使用'f'；
+                # 对于64位浮点数，使用'd'。
+                # 如果bytes表示的是大端序，可以使用'!'作为格式字符串的前缀来指定字节顺序。
+                raw_value = unpack('!f', bytes(raw_data))[0]
+            else:
+                msg = f"无法解析{item.name}的物理值,尚未支持类型{data_type}"
+                self.text_log(msg, 'error')
+                return value
+
+            # 若是转换类型为映射表
+            conversion_type = item.conversion.conversion_type
+            if conversion_type == ASAP2EnumConversionType.TAB_VERB:
+                if raw_value in item.conversion.compu_tab_ref.read_dict:
+                    value = raw_value
+                    return ''.join(
+                        [item.conversion.compu_tab_ref.read_dict[value], ':',
+                         pad_hex(hex(value), ASAP2EnumDataType.get_size(data_type.name))])
+                else:
+                    msg = f"无法解析{item.name}的物理值,{raw_value}的映射不存在"
+                    self.text_log(msg, 'error')
+                    return value
+            # 若是转换类型为普通数值(线性转换)
+            elif conversion_type == ASAP2EnumConversionType.RAT_FUNC:
+                # raw_value = f(physical_value);
+                # f(x) = B*x + C;
+                coeffs = item.conversion.coeffs
+                value = (raw_value - coeffs[2]) / coeffs[1]
+            else:
+                msg = f"无法解析{item.name}的物理值,尚未支持类型{conversion_type}"
+                self.text_log(msg, 'error')
+                return value
+            # 格式化
+            fm = item.conversion.format[1:] # 去掉%,%8.2->8.2
+            if fm:
+                value = f"{value: <{fm}f}"
+            # 返回
+            return value.strip()
 
     def __get_raw_data(self,
-                       item: MeasureItem | CalibrateItem,
+                       item: ASAP2Calibrate,
                        physical_value: str) -> tuple[str | None, bytes | None]:
         """
-        根据物理值，求其原始值字节序列;
+        根据物理值，求标定对象的原始值字节序列;
         raw_value = f(physical_value);
         f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F);
 
         :param item: 测量/标定数据项
-        :type item: MeasureItem | CalibrateItem
+        :type item: ASAP2Calibrate
         :param physical_value: 物理值(数字的字符串显示形式，对于映射为显示名称)
         :type physical_value: str
         :return: 物理值(数字的字符串显示形式，对于映射则为显示的名称)，原始值字节序列(大端)
         :rtype: tuple[str | None, bytes | None]
         """
+        conversion_type = item.conversion.conversion_type
         # 若是转换类型为映射表
-        if (physical_value is not None) and (item.conversion_type == "TAB_VERB"):
-            vtab_dict = {v:k for k,v in item.compu_vtab.items()}  # 数值映射字典，名称->数值
-            value = vtab_dict[physical_value[0:physical_value.find(':0x')]]
+        if (physical_value is not None) and (conversion_type == ASAP2EnumConversionType.TAB_VERB):
+            vtab_write_dict = item.conversion.compu_tab_ref.write_dict  # 数值映射字典，名称->数值
+            value = vtab_write_dict[physical_value]
         # 若是转换类型为普通数值
-        elif (physical_value is not None) and (item.conversion_type == "RAT_FUNC"):
+        elif (physical_value is not None) and (conversion_type == ASAP2EnumConversionType.RAT_FUNC):
             # raw_value = f(physical_value);
             # f(x) = B*x + C;
-            value = float(physical_value) * item.coeffs[1] + item.coeffs[2] # 线性转换
+            coeffs = item.conversion.coeffs
+            value = float(physical_value) * coeffs[1] + coeffs[2] # 线性转换
         else:
-            msg = f"无法解析{item.name}的原始值,尚未支持类型{item.conversion_type}"
+            msg = f"无法解析{item.name}的原始值,尚未支持类型{conversion_type}"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return None, None
         # 根据不同类型和转换方法求解原始值
-        if item.data_type == 'UBYTE':
+        data_type = item.record_layout.fnc_values.data_type
+        if data_type == ASAP2EnumDataType.UBYTE:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=False) # 原始值
-        elif item.data_type == 'SBYTE':
+        elif data_type == ASAP2EnumDataType.SBYTE:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=True)  # 原始值
-        elif item.data_type == 'UWORD':
+        elif data_type == ASAP2EnumDataType.UWORD:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=False)  # 原始值
-        elif item.data_type == 'SWORD':
+        elif data_type == ASAP2EnumDataType.SWORD:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=True)  # 原始值
-        elif item.data_type == 'ULONG':
+        elif data_type == ASAP2EnumDataType.ULONG:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=False)  # 原始值
-        elif item.data_type == 'SLONG':
+        elif data_type == ASAP2EnumDataType.SLONG:
             value = int(value)
             raw_data = int.to_bytes(value,
-                                    length=self.model.ASAP2_TYPE_SIZE[item.data_type],
+                                    length=ASAP2EnumDataType.get_size(data_type.name),
                                     byteorder='big',
                                     signed=True)  # 原始值
-        elif item.data_type == 'FLOAT32_IEEE':
+        elif data_type == ASAP2EnumDataType.FLOAT32_IEEE:
             raw_data = pack('!f', value)  # 原始值
             value = self.__get_physical_value(item, raw_data) # 重新计算浮点数
         else:
-            msg = f"无法解析{item.name}的原始值,尚未支持类型{item.data_type}"
+            msg = f"无法解析{item.name}的原始值,尚未支持类型{data_type}"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return None, None
 
         # 对于转换映射类型，将数值转为名称再返回
-        if item.conversion_type == "TAB_VERB":
+        if conversion_type == ASAP2EnumConversionType.TAB_VERB:
+            vtab_read_dict = item.conversion.compu_tab_ref.read_dict  # 数值映射字典，数值->名称
             value = ''.join(
-                    [item.compu_vtab[value], ':', pad_hex(hex(value), self.model.ASAP2_TYPE_SIZE[item.data_type])])
+                    [vtab_read_dict[value], ':',
+                     pad_hex(hex(value), ASAP2EnumDataType.get_size(data_type.name))])
         # 返回
         return str(value), raw_data
 
@@ -2276,30 +2189,217 @@ class MeasureCtrl(object):
 
     @staticmethod
     def get_selected_cell_in_table(e: tk.Event,
-                                   table: ttk.Treeview, ) -> tuple[str, str, tuple[int, int, int, int]]:
+                                   table: ttk.Treeview, ) -> tuple[str, str, str, tuple[int, int, int, int]]:
         """
-        获取表格中选中的单元格，返回（iid，列名，几何位置）
+        获取表格中选中的单元格，返回（iid，列名，'Name'列名称，几何位置）
 
         :param e: 事件
         :type e: tk.Event
         :param table: 表格
         :type table: ttk.Treeview
-        :return: (iid，列名，几何位置)
-        :rtype: tuple[str,str,tuple[int,int,int,int]]
+        :return: (iid，列名，'Name'列名称，几何位置)
+        :rtype: tuple[str,str,str,tuple[int,int,int,int]]
         """
         iid = ''
-        selected_col = ''
+        col = ''
+        name = ''
         x = y = w = h = 0
         # 选中数据项为空则退出
         if not table.selection():
-            return iid, selected_col, (x, y, w, h)
+            return iid, col, name, (x, y, w, h)
         iid = table.selection()[0]  # 选中的数据项id
         col_names = table['columns']  # 表列名列表
         # 判断鼠标点击事件的位置, 是否在选中数据项的边界内, 如果在, 则获取该列的列名和数据项值，否则退出
-        for idx, col_name in enumerate(col_names):
+        for col_name in col_names:
             # 获取选中单元格的边界（相对于控件窗口的坐标），形式为 (x, y, width, height)
             x, y, w, h = table.bbox(iid, col_name)
             if x < e.x < x + w and y < e.y < y + h:
-                selected_col = col_name  # 选中的数据项所在列的列名
+                col = col_name  # 选中的数据项所在列的列名
+                if 'Name' in col_names:
+                    name = table.set(iid, 'Name')
                 break
-        return iid, selected_col, (x, y, w, h)
+        return iid, col, name, (x, y, w, h)
+
+    def __assign_calibration_dict(self, names: tuple[str,...], dest: dict[str, ASAP2Calibrate]) -> None:
+        """
+        根据标定对象名称获取其属性，并填充到指定的标定对象字典中
+
+        Args:
+            names (tuple[str]): 存储标定名称的元组
+            dest (dict[str, ASAP2Calibrate]): 存储标定对象的字典
+        """
+        dest.clear()
+        for name in names:
+            dest[name] = ASAP2Calibrate(name=name)
+        for cal_item in dest.values():
+            # ->获取a2l标定对象,以下属性直接或间接来自于此对象
+            a2l_item = self.model.a2l_calibration_dict[cal_item.name]
+
+            # ->描述
+            cal_item.long_identifier = a2l_item.long_identifier
+
+            # ->标定类型
+            cal_item.cal_type = ASAP2EnumCalibrateType.creat(a2l_item.type)
+
+            # ->内存地址
+            cal_item.address = a2l_item.address
+
+            # ->数据记录内存布局
+            a2l_record_layout = self.model.a2l_record_layout_dict[a2l_item.record_layout]
+            # -->表值(函数值)内存布局
+            if a2l_record_layout.fnc_values:
+                fnc_values = ASAP2FncValues(
+                    position=a2l_record_layout.fnc_values.position,
+                    data_type=ASAP2EnumDataType.creat(a2l_record_layout.fnc_values.data_type) if
+                    a2l_record_layout.fnc_values.data_type else None,
+                    index_mode=ASAP2EnumIndexMode.creat(a2l_record_layout.fnc_values.index_mode) if
+                    a2l_record_layout.fnc_values.index_mode else None,
+                    address_type=ASAP2EnumAddrType.creat(a2l_record_layout.fnc_values.address_type) if
+                    a2l_record_layout.fnc_values.address_type else None
+                )
+            else:
+                fnc_values = None
+            # -->轴点内存布局
+            if a2l_record_layout.axis_pts_x:
+                axis_pts_x = ASAP2AxisPtsXYZ45(
+                    position=a2l_record_layout.axis_pts_x.position,
+                    data_type=ASAP2EnumDataType.creat(a2l_record_layout.axis_pts_x.data_type) if
+                    a2l_record_layout.axis_pts_x.data_type else None,
+                    index_order=ASAP2EnumIndexOrder.creat(a2l_record_layout.axis_pts_x.index_incr) if
+                    a2l_record_layout.axis_pts_x.index_incr else None,
+                    address_type=ASAP2EnumAddrType.creat(a2l_record_layout.axis_pts_x.addressing) if
+                    a2l_record_layout.axis_pts_x.addressing else None
+                )
+            else:
+                axis_pts_x = None
+            # -->内存布局
+            cal_item.record_layout = ASAP2RecordLayout(name=a2l_record_layout.name,
+                                                       fnc_values=fnc_values,
+                                                       axis_pts_x=axis_pts_x)
+            # ->值调整的最大浮点数
+            cal_item.max_diff = a2l_item.max_diff
+
+            # ->转换方法
+            a2l_conversion = self.model.a2l_conversion_dict[a2l_item.conversion]
+            # -->转换表
+            if a2l_conversion.compu_tab_ref:
+                a2l_compu_vtab = self.model.a2l_compu_vtab_dict[a2l_conversion.compu_tab_ref]
+                compu_vtab = ASAP2CompuVtab(
+                    name=a2l_compu_vtab.name,
+                    long_identifier=a2l_compu_vtab.long_identifier,
+                    number_value_pairs=a2l_compu_vtab.number_value_pairs,
+                    read_dict=a2l_compu_vtab.read_dict,
+                    write_dict=a2l_compu_vtab.write_dict
+                )
+            else:
+                compu_vtab = None
+            # -->转换方法
+            cal_item.conversion = ASAP2CompuMethod(
+                name=a2l_conversion.name,
+                long_identifier=a2l_conversion.long_identifier,
+                conversion_type=ASAP2EnumConversionType.creat(a2l_conversion.conversion_type) if
+                a2l_conversion.conversion_type else None,
+                format=a2l_conversion.format,
+                unit=a2l_conversion.unit,
+                coeffs=a2l_conversion.coeffs,
+                compu_tab_ref=compu_vtab
+            )
+
+            # ->物理值下限
+            cal_item.lower_limit = a2l_item.lower_limit
+
+            # ->物理值上限
+            cal_item.upper_limit = a2l_item.upper_limit
+
+            # ->对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+            cal_item.array_size = a2l_item.number
+
+            # ->坐标轴描述
+            if a2l_item.axis_descrs:
+                cal_item.axis_descrs = []
+                for axis_descr in a2l_item.axis_descrs:
+                    a2l_axis_pts: AxisPts = self.model.a2l_axis_pts_dict[axis_descr.axis_pts_ref]
+                    # --> 数据记录内存布局
+                    a2l_axis_record_layout = self.model.a2l_record_layout_dict[a2l_axis_pts.record_layout]
+                    # --->表值(函数值)内存布局
+                    if a2l_axis_record_layout.fnc_values:
+                        fnc_values = ASAP2FncValues(
+                            position=a2l_axis_record_layout.fnc_values.position,
+                            data_type=ASAP2EnumDataType.creat(a2l_axis_record_layout.fnc_values.data_type) if
+                            a2l_axis_record_layout.fnc_values.data_type else None,
+                            index_mode=ASAP2EnumIndexMode.creat(a2l_axis_record_layout.fnc_values.index_mode) if
+                            a2l_axis_record_layout.fnc_values.index_mode else None,
+                            address_type=ASAP2EnumAddrType.creat(a2l_axis_record_layout.fnc_values.address_type) if
+                            a2l_axis_record_layout.fnc_values.address_type else None
+                        )
+                    else:
+                        fnc_values = None
+                    # --->轴点内存布局
+                    if a2l_axis_record_layout.axis_pts_x:
+                        axis_pts_x = ASAP2AxisPtsXYZ45(
+                            position=a2l_axis_record_layout.axis_pts_x.position,
+                            data_type=ASAP2EnumDataType.creat(a2l_axis_record_layout.axis_pts_x.data_type) if
+                            a2l_axis_record_layout.axis_pts_x.data_type else None,
+                            index_order=ASAP2EnumIndexOrder.creat(a2l_axis_record_layout.axis_pts_x.index_incr) if
+                            a2l_axis_record_layout.axis_pts_x.index_incr else None,
+                            address_type=ASAP2EnumAddrType.creat(a2l_axis_record_layout.axis_pts_x.addressing) if
+                            a2l_axis_record_layout.axis_pts_x.addressing else None
+                        )
+                    else:
+                        axis_pts_x = None
+                    # --->内存布局
+                    record_layout = ASAP2RecordLayout(name=a2l_axis_record_layout.name,
+                                                      fnc_values=fnc_values,
+                                                      axis_pts_x=axis_pts_x)
+
+                    # -->转换方法
+                    a2l_conversion = self.model.a2l_conversion_dict[a2l_axis_pts.conversion]
+                    # --->转换表
+                    if a2l_conversion.compu_tab_ref:
+                        a2l_axis_compu_vtab = self.model.a2l_compu_vtab_dict[a2l_conversion.compu_tab_ref]
+                        compu_vtab = ASAP2CompuVtab(
+                            name=a2l_axis_compu_vtab.name,
+                            long_identifier=a2l_axis_compu_vtab.long_identifier,
+                            number_value_pairs=a2l_axis_compu_vtab.number_value_pairs,
+                            read_dict=a2l_axis_compu_vtab.read_dict,
+                            write_dict=a2l_axis_compu_vtab.write_dict
+                        )
+                    else:
+                        compu_vtab = None
+                    # --->转换方法
+                    conversion = ASAP2CompuMethod(
+                        name=a2l_conversion.name,
+                        long_identifier=a2l_conversion.long_identifier,
+                        conversion_type=ASAP2EnumConversionType.creat(a2l_conversion.conversion_type) if
+                        a2l_conversion.conversion_type else None,
+                        format=a2l_conversion.format,
+                        unit=a2l_conversion.unit,
+                        coeffs=a2l_conversion.coeffs,
+                        compu_tab_ref=compu_vtab
+                    )
+
+                    # -->轴点参考
+                    axis_pts_ref = ASAP2AxisPts(
+                        name=a2l_axis_pts.name,
+                        long_identifier=a2l_axis_pts.long_identifier,
+                        address=a2l_axis_pts.address,
+                        input_quantity=a2l_axis_pts.input_quantity,
+                        record_layout=record_layout,
+                        max_diff=a2l_axis_pts.max_diff,
+                        conversion=conversion,
+                        max_axis_points=a2l_axis_pts.max_axis_points,
+                        lower_limit=a2l_axis_pts.lower_limit,
+                        upper_limit=a2l_axis_pts.upper_limit
+                    )
+
+                    # -->轴描述
+                    cal_item.axis_descrs.append(
+                        ASAP2AxisDescr(
+                            axis_type=ASAP2EnumAxisType.creat(axis_descr.attribute),
+                            axis_pts_ref=axis_pts_ref)
+                    )
+
+            # 物理值
+            cal_item.value = None
+            # value字段的原始数据序列
+            cal_item.data = None

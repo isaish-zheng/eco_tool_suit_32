@@ -4,22 +4,21 @@
 # @Time    : 2024/7/12 上午8:34
 # @version : V1.0.0
 # @function:
-from queue import Queue
-##############################
-# Module imports
-##############################
-
-from tkinter import StringVar
 from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple
+from queue import Queue
+from tkinter import StringVar
 
-from xba2l.a2l_lib import Module, MemorySegment, Measurement, CompuMethod, CompuVtab, Characteristic, RecordLayout, \
-    AxisPts
+from xba2l.a2l_lib import Module, MemorySegment, Measurement, Characteristic, \
+    CompuMethod, CompuVtab,  RecordLayout, AxisPts
 
 from eco import eco_pccp
 from srecord import Srecord
-from utils import singleton
+
+
+##############################
+# Module imports
+##############################
 
 
 ##############################
@@ -30,8 +29,7 @@ from utils import singleton
 ##############################
 # Type definitions
 ##############################
-
-class NamedTupleDataType(NamedTuple):
+class ASAP2EnumDataType(Enum):
     """
     用于描述基本数据类型
 
@@ -45,17 +43,65 @@ class NamedTupleDataType(NamedTuple):
         FLOAT32_IEEE (int): IEEE 32位浮点数
         FLOAT64_IEEE (int): IEEE 64位浮点数
     """
-    UBYTE: int = 1
+    UBYTE: int = 0
     SBYTE: int = 1
     UWORD: int = 2
-    SWORD: int = 2
+    SWORD: int = 3
     ULONG: int = 4
-    SLONG: int = 4
-    FLOAT32_IEEE: int = 4
-    FLOAT64_IEEE: int = 8
+    SLONG: int = 5
+    FLOAT32_IEEE: int = 6
+    FLOAT64_IEEE: int = 7
+
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值创建枚举
+
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumDataType: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+    @classmethod
+    def get_size(cls, v: str) -> int:
+        """
+        获取数据类型的大小(字节)
+
+        Args:
+            v (str): 数据类型名称
+        Returns:
+            int: 大小
+        Raises:
+            TypeError: 无效输入类型
+        """
+        if v in ("UBYTE", "SBYTE"):
+            return 1
+        elif v in ("UWORD", "SWORD"):
+            return 2
+        elif v in ("ULONG", "SLONG", "FLOAT32_IEEE"):
+            return 4
+        elif v in ("FLOAT64_IEEE",):
+            return 8
+        raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
 
 
-class EnumAddrType(Enum):
+class ASAP2EnumAddrType(Enum):
     """
     用于描述表值或轴点值寻址的枚举
 
@@ -70,8 +116,34 @@ class EnumAddrType(Enum):
     PLONG: int = 4
     DIRECT: int = 0
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
 
-class EnumByteOrder(Enum):
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumAddrType: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+
+class ASAP2EnumByteOrder(Enum):
     """
     用于描述字节顺序的枚举
 
@@ -82,8 +154,34 @@ class EnumByteOrder(Enum):
     MSB_FIRST: int = 0
     MSB_LAST: int = 1
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
 
-class EnumIndexOrder(Enum):
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumByteOrder: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+
+class ASAP2EnumIndexOrder(Enum):
     """
     用于描述轴点序列的枚举
 
@@ -94,8 +192,34 @@ class EnumIndexOrder(Enum):
     INDEX_INCR: int = 0
     INDEX_DECR: int = 1
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
 
-class EnumIndexMode(Enum):
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumIndexOrder: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+
+class ASAP2EnumIndexMode(Enum):
     """
     用于描述二维表值值映射到一维地址空间
 
@@ -106,8 +230,34 @@ class EnumIndexMode(Enum):
     COLUMN_DIR: int = 0
     ROW_DIR: int = 1
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
 
-class EnumCalibrateType(Enum):
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumIndexMode: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+
+class ASAP2EnumCalibrateType(Enum):
     """
     用于描述标定类型
 
@@ -121,11 +271,37 @@ class EnumCalibrateType(Enum):
     VALUE: int = 0
     CURVE: int = 1
     MAP: int = 2
-    VAL_BLK: int = 3  # array of values
-    ASCII: int = 4  # string
+    VAL_BLK: int = 3
+    ASCII: int = 4
+
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
+
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumCalibrateType: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
 
 
-class EnumConversionType(Enum):
+class ASAP2EnumConversionType(Enum):
     """
     用于描述转换方法类型
 
@@ -142,8 +318,34 @@ class EnumConversionType(Enum):
     TAB_NOINTP: int = 3
     FORM: int= 4
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
 
-class EnumAxisType(Enum):
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumConversionType: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
+
+class ASAP2EnumAxisType(Enum):
     """
     用于描述轴的类型
 
@@ -162,64 +364,90 @@ class EnumAxisType(Enum):
     RES_AXIS: int = 2
     CURVE_AXIS: int = 3
 
+    @classmethod
+    def creat(cls, v: str | int):
+        """
+        通过名称或数值值创建枚举
+
+        Args:
+            v (str | int): 名称或数值
+        Returns:
+            ASAP2EnumAxisType: 枚举
+        Raises:
+            ValueError: 无效输入值
+            TypeError: 无效输入类型
+        """
+        if isinstance(v, int):
+            for attr in cls:
+                if attr.value == v:
+                    return attr
+            raise ValueError(f"Invalid input value in {cls.__name__}: {v}")
+        elif isinstance(v, str):
+            for attr in cls:
+                if attr.name == v:
+                    return attr
+            raise ValueError(f"Invalid input name in {cls.__name__}: {v}")
+        else:
+            raise TypeError(f"Invalid input type in {cls.__name__}: {v}")
+
 
 ##############################
 # Model API function declarations
 ##############################
 
 @dataclass(slots=True)
-class FncValues(object):
+class ASAP2FncValues(object):
     """
     用于描述标定对象的表值(函数值)如何存入内存，被RecordLayout对象引用
 
     Attributes:
         position (int): 轴点值的位置(数据记录中元素序列的描述)
-        data_type (NamedTupleDataType): 数据类型
-        index_mode (EnumIndexMode): 描述二维表值值映射到一维地址空间
-        address_type (EnumAddrType): 轴点寻址方式
+        data_type (ASAP2EnumDataType): 数据类型
+        index_mode (ASAP2EnumIndexMode): 描述二维表值值映射到一维地址空间
+        address_type (ASAP2EnumAddrType): 轴点寻址方式
     """
     position: int | None = None
-    data_type: NamedTupleDataType | None = None
-    index_mode: EnumIndexMode | None = None
-    address_type: EnumAddrType | None = None
+    data_type: ASAP2EnumDataType | None = None
+    index_mode: ASAP2EnumIndexMode | None = None
+    address_type: ASAP2EnumAddrType | None = None
 
 
 @dataclass(slots=True)
-class AxisPtsXYZ45(object):
+class ASAP2AxisPtsXYZ45(object):
     """
     用于描述轴点在内存中的存放位置，被RecordLayout对象引用
 
     Attributes:
         position (int): 轴点值的位置(数据记录中元素序列的描述)
-        data_type (NamedTupleDataType): 数据类型
-        index_order (EnumIndexOrder): 轴点序列，随着地址的增加而减少或增加索引
-        address_type (EnumAddrType): 轴点寻址方式
+        data_type (ASAP2EnumDataType): 数据类型
+        index_order (ASAP2EnumIndexOrder): 轴点序列，随着地址的增加而减少或增加索引
+        address_type (ASAP2EnumAddrType): 轴点寻址方式
     """
     position: int | None = None
-    data_type: NamedTupleDataType | None = None
-    index_order: EnumIndexOrder | None = None
-    address_type: EnumAddrType | None = None
+    data_type: ASAP2EnumDataType | None = None
+    index_order: ASAP2EnumIndexOrder | None = None
+    address_type: ASAP2EnumAddrType | None = None
 
 
 @dataclass(slots=True)
-class RecordLayout:
+class ASAP2RecordLayout:
     """
     用于指定内存中可调整对象的各种记录布局;
     如果ALTERNATE选项与FNC_VALUES一起使用,则position参数将确定值和轴点的顺序
 
     Attributes:
         name (str): 名称
-        fnc_values (FncValues): 描述标定对象的表值(函数值)如何存入内存
-        axis_pts_x (AxisPtsXYZ45): 轴点在内存中的存放位置
+        fnc_values (ASAP2FncValues): 描述标定对象的表值(函数值)如何存入内存
+        axis_pts_x (ASAP2AxisPtsXYZ45): 轴点在内存中的存放位置
     """
     name: str | None = None
     # 可选
-    fnc_values: FncValues | None = None
-    axis_pts_x: AxisPtsXYZ45 | None = None
+    fnc_values: ASAP2FncValues | None = None
+    axis_pts_x: ASAP2AxisPtsXYZ45 | None = None
 
 
 @dataclass(slots=True)
-class TypeCompuVtab:
+class ASAP2CompuVtab:
     """
     用于位模式可视化的转换表，被TypeConversion对象引用
 
@@ -238,33 +466,33 @@ class TypeCompuVtab:
 
 
 @dataclass(slots=True)
-class TypeConversion(object):
+class ASAP2CompuMethod(object):
     """
     用于描述转换方法
 
     Attributes:
         name (str): 名称
         long_identifier (str): 描述
-        conversion_type (EnumConversionType): 转换类型
+        conversion_type (ASAP2EnumConversionType): 转换类型
         format (str): %[length].[layout]，length表示总长度;layout表示小数位
         unit (str): 物理单位
         coeffs (tuple[float, float, float, float, float, float]): 有理函数的系数,raw_value = f(physical_value),
             f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F)
-        compu_tab_ref (TypeCompuVtab): 对包含转化表的数据记录的引用,
+        compu_tab_ref (ASAP2CompuVtab): 对包含转化表的数据记录的引用,
             只能引用COMPU_TAB、COMPU_VTAB或COMPU_VTAB_RANGE类型的对象
     """
 
     name: str | None = None
     long_identifier: str | None = None
-    conversion_type: EnumConversionType | None = None
+    conversion_type: ASAP2EnumConversionType | None = None
     format: str | None = None
     unit: str | None = None
     # 可选
     coeffs: tuple[float, float, float, float, float, float] | None = None
-    compu_tab_ref: TypeCompuVtab | None = None
+    compu_tab_ref: ASAP2CompuVtab | None = None
 
 @dataclass(slots=True)
-class AxisPts:
+class ASAP2AxisPts:
     """
     用于处理轴点分布的参数规范,被AxisDescr对象引用
 
@@ -273,94 +501,77 @@ class AxisPts:
         long_identifier (str): 描述
         address (int): 内存地址
         input_quantity (str): 输入数量,若未分配,则应设置为NO_INPUT_QUANTITY
-        record_layout (RecordLayout): 数据记录内存布局
+        record_layout (ASAP2RecordLayout): 数据记录内存布局
         max_diff (float): 值调整的最大浮点数
-        conversion (TypeConversion): 转换方法
+        conversion (ASAP2CompuMethod): 转换方法
         max_axis_points (int): 最大轴点数
         lower_limit (float): 物理值下限
         upper_limit (float): 物理值上限
     """
     name: str | None = None
     long_identifier: str | None = None
-    # cal_type: EnumCalibrateType | None = None
+    # cal_type: ASAP2EnumCalibrateType | None = None
     address: int | None = None
     input_quantity: str | None = None
-    record_layout: RecordLayout | None = None
+    record_layout: ASAP2RecordLayout | None = None
     max_diff: float | None = None
-    conversion: TypeConversion | None = None
+    conversion: ASAP2CompuMethod | None = None
     max_axis_points: int | None = None
     lower_limit: float | None = None
     upper_limit: float | None = None
 
 
 @dataclass(slots=True)
-class AxisDescr:
+class ASAP2AxisDescr:
     """
     用于对标定对象中的轴描述
 
     Attributes:
-        axis_type (EnumAxisType): 轴属性
-        input_quantity (str): 输入数量,若未分配,则应设置为NO_INPUT_QUANTITY
-        conversion (TypeConversion): 转换方法,若无,如CURVE_AXIS,则应设置为NO_COMPU_METHOD
-        max_axis_points (int): 最大轴点数
-        lower_limit (float): 物理值下限
-        upper_limit (float): 物理值上限
-        axis_pts_ref (AxisPts): 对AXIS_PTS记录的引用,用于轴点分布的描述
+        axis_type (ASAP2EnumAxisType): 轴属性
+        axis_pts_ref (ASAP2AxisPts): 对AXIS_PTS记录的引用,用于轴点分布的描述
     """
-    axis_type: EnumAxisType | None = None
-    input_quantity: str | None = None
-    conversion: TypeConversion | None = None
-    max_axis_points: int | None = None
-    lower_limit: float | None = None
-    upper_limit: float | None = None
+    axis_type: ASAP2EnumAxisType | None = None
     # 可选
-    axis_pts_ref: AxisPts | None = None
+    axis_pts_ref: ASAP2AxisPts | None = None
 
 
 @dataclass(slots=True)
-class TypeCalibrate(object):
+class ASAP2Calibrate(object):
     """
     标定表格中的数据项类
 
     Attributes:
         name (str): 名称
         long_identifier (str): 描述
-        cal_type (EnumCalibrateType): 标定类型
+        cal_type (ASAP2EnumCalibrateType): 标定类型
         address (int): 内存地址
-        record_layout (RecordLayout): 数据记录内存布局
+        record_layout (ASAP2RecordLayout): 数据记录内存布局
         max_diff (float): 值调整的最大浮点数
-        conversion (TypeConversion): 转换方法
+        conversion (ASAP2CompuMethod): 转换方法
         lower_limit (float): 物理值下限
         upper_limit (float): 物理值上限
         array_size (int): 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
-        axis_descrs (list[AxisDescr]): 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+        axis_descrs (list[ASAP2AxisDescr]): 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
         value (str): 物理值
-        unit (str): 单位
         data (bytes): value字段的原始数据序列
-        idx_in_table_calibrate_items (int): 当前对象在标定表格列表中的索引
-        idx_in_a2l_calibrations (int): 当前对象在A2L标定对象列表中的索引
     """
     name: str | None = None
     long_identifier: str | None = None
-    cal_type: EnumCalibrateType | None = None
+    cal_type: ASAP2EnumCalibrateType | None = None
     address: int | None = None
-    record_layout: RecordLayout | None = None
+    record_layout: ASAP2RecordLayout | None = None
     max_diff: float | None = None
-    conversion: TypeConversion | None = None
+    conversion: ASAP2CompuMethod | None = None
     lower_limit: float | None = None
     upper_limit: float | None = None
 
     # 可选
     array_size: int | None = None
-    axis_descrs: list[AxisDescr] | None = None
+    axis_descrs: list[ASAP2AxisDescr] | None = None
 
     # 自定义
     value: str | None = None
-    unit: str | None = None
     data: bytes | None = None
-
-    idx_in_table_calibrate_items: int | None = None
-    idx_in_a2l_calibrations: int | None = None
 
 
 ##############################
@@ -584,6 +795,7 @@ class MeasureModel(object):
     """
     测量标定界面的数据模型
     """
+    daqs_cfg: dict[int, dict[str, int]]
 
     ASAP2_TYPE_SIZE = {
         'UBYTE': 1,
@@ -605,40 +817,39 @@ class MeasureModel(object):
         self.refresh_operate_measure_time_ms = '100'  # 存储测量表格数值刷新时间，默认100ms
         self.history_epk = ''  # 存储历史数据epk
         self.table_measure_items: list[MeasureItem] = []  # 存储测量表格当前显示的数据项内容
-        self.table_calibrate_items: list[CalibrateItem] = []  # 存储标定表格当前显示的数据项内容
+        self.table_calibrate_dict: dict[str, ASAP2Calibrate] = {}
 
-        self.obj_measure: eco_pccp.Measure = None  # 存储测量对象，用于与ecu通信
-        self.obj_srecord: Srecord = None  # 存储SRecord对象，用于解析PGM文件
+        self.obj_measure: eco_pccp.Measure | None= None  # 存储测量对象，用于与ecu通信
+        self.obj_srecord: Srecord | None= None  # 存储SRecord对象，用于解析PGM文件
 
         self.entry_search_measure_item = StringVar()  # 存储测量选择数据项表格搜索框输入的内容
         self.entry_search_calibrate_item = StringVar()  # 存储选择表格搜索框输入的内容
 
         self.ecu_epk = ''  # 存储ECU内存中的epk
         self.pgm_epk = ''  # 存储PGM文件解析后的epk
+
+        self.a2l_module: Module | None = None  # 存储A2L文件解析后的模块对象
         self.a2l_epk_addr: str = ''  # 存储A2L文件解析后的epk地址,16进制
         self.a2l_epk = ''  # 存储A2L文件解析后的epk
-        self.a2l_module: Module = None  # 存储A2L文件解析后的模块对象
-        self.a2l_memory_code: MemorySegment = None  # 存储A2L文件解析后的代码段内存段对象
-        self.a2l_memory_epk_data: MemorySegment = None  # 存储A2L文件解析后的epk数据内存段对象
-        self.a2l_memory_ram_cal: MemorySegment = None  # 存储A2L文件解析后的ram标定内存段对象
-        self.a2l_memory_rom_cal: MemorySegment = None  # 存储A2L文件解析后的rom标定内存段对象
+
+        self.a2l_memory_code: MemorySegment | None = None  # 存储A2L文件解析后的代码段内存段对象
+        self.a2l_memory_epk_data: MemorySegment | None = None  # 存储A2L文件解析后的epk数据内存段对象
+        self.a2l_memory_ram_cal: MemorySegment | None = None  # 存储A2L文件解析后的ram标定内存段对象
+        self.a2l_memory_rom_cal: MemorySegment | None = None  # 存储A2L文件解析后的rom标定内存段对象
         self.a2l_measurements: list[Measurement] = []  # 存储A2L文件解析后的测量对象列表
         self.a2l_calibrations: list[Characteristic] = []  # 存储A2L文件解析后的标定对象列表
+        self.a2l_calibration_dict: dict[str, Characteristic] = {}  # 存储A2L文件解析后的标定(可调整)对象字典
 
-        self.a2l_conversions: list[CompuMethod] = []  # 存储A2L文件解析后的转换方法列表
-        self.a2l_compu_vtabs: list[CompuVtab] = []  # 存储A2L文件解析后的转换映射列表
-        self.a2l_record_layouts: list[RecordLayout] = []  # 存储A2L文件解析后的标定变量存储结构
-        self.a2l_axis_pts_dict: dict[str, list[AxisPts]] = {}  # 存储A2L文件解析后的标定变量的轴类型，被一维表、二维表等引用
+        self.a2l_record_layout_dict: dict[str, RecordLayout] = {}  # 存储A2L文件解析后的标定变量内存布局
+        self.a2l_conversion_dict: dict[str, CompuMethod] = {}  # 存储A2L文件解析后的转换方法
+        self.a2l_compu_vtab_dict: dict[str, CompuVtab] = {}  # 存储A2L文件解析后的转换表
+        self.a2l_axis_pts_dict: dict[str, list[AxisPts]] = {}  # 存储A2L文件解析后的标定变量的轴类型参考，被一维表、二维表等引用
 
         # 下面列表中元素实际指向的内容是相同的，即filter_items由raw_items经浅拷贝得到
         self.table_select_measure_raw_items: list[SelectMeasureItem] = []  # 存储测量选择数据项表格所有的数据项内容
         self.table_select_measure_filter_items: list[SelectMeasureItem] = []  # 存储测量选择表格当前显示的数据项内容（筛选后的数据项）
         self.table_select_calibrate_raw_items: list[SelectCalibrateItem] = []  # 存储选择标定数据项表格所有的数据项内容
         self.table_select_calibrate_filter_items: list[SelectCalibrateItem] = []  # 存储选择表格当前显示的数据项内容（筛选后的数据项）
-
-        self.table_calibrate_axis_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴数据项内容
-        self.table_calibrate_axis2_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴数据项内容
-        self.table_calibrate_value_pts: list[CalibrateItem] = []  # 存储标定变量引用坐标轴对应值数据项内容
 
         # 存储daq列表配置字典{daq通道：{'first_pid':int,'odts_size':int},}
         # 例如{1: {'first_pid': 0x3c, 'odts_size': 0x20},
@@ -657,3 +868,7 @@ class MeasureModel(object):
 
         # 存储线程间通信的队列,测量时的待显示数据
         self.q = Queue()
+
+        self.table_calibrate_axis_dict: dict[str, ASAP2Calibrate] = {}
+        self.table_calibrate_axis2_dict: dict[str, ASAP2Calibrate] = {}
+        self.table_calibrate_value_dict: dict[str, ASAP2Calibrate] = {}
