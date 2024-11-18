@@ -90,6 +90,9 @@ class MeasureCtrl(object):
         self.__pool_recv = ThreadPoolExecutor(max_workers=1, thread_name_prefix='task_recv_')
         self.__after_id = None  # 窗口定时器id
 
+        self.__curve_view = None  # Curve标定界面
+        self.__curve_view = None  # Map标定界面
+
         # 初始化配置
         self.ini_config()
         # 加载配置
@@ -1041,11 +1044,11 @@ class MeasureCtrl(object):
         # 获取选中的单元格
         try:
             selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
-                                                                                        table=table))
+                                                                                                       table=table))
             # 未选中单元格则退出
             if not selected_iid or not selected_col:
                 return
-            print(f"selected_col:{selected_col}")
+
             # 若不是修改Value列则退出
             if selected_col != 'Value':
                 return
@@ -1053,6 +1056,7 @@ class MeasureCtrl(object):
             cal_item = self.model.table_calibrate_dict[selected_name]
             # 根据标定类型进行相应处理
             if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
+                # 显示输入框
                 SubCalibrateValueView(master=table,
                                       item=cal_item,
                                       geometry=(x,y,w,h),
@@ -1142,28 +1146,16 @@ class MeasureCtrl(object):
                     # 添加数据项
                     axis_calibrate_dict[axis_calibrate.name] = axis_calibrate
 
-                print('一维表')
                 # 存储到数据模型
                 self.model.table_calibrate_axis_dict = axis_calibrate_dict
                 self.model.table_calibrate_value_dict = value_calibrate_dict
-                # 打开标定界面
+                # 显示Curve标定界面
                 self.__curve_view = SubCalibrateCurveView(master=self.view,
-                                                          axis_calibrate_dict=axis_calibrate_dict,
-                                                          value_calibrate_dict=value_calibrate_dict,
+                                                          axis_calibrate_dict=self.model.table_calibrate_axis_dict ,
+                                                          value_calibrate_dict=self.model.table_calibrate_value_dict,
                                                           presenter=self)
-                # 显示物理值到界面
-                name = list(axis_calibrate_dict.keys())[0]
-                x_name = name[0:name.find('_X(0)')]
-                values = [item.value for item in axis_calibrate_dict.values()]
-                self.__curve_view.table_calibrate.insert(
-                    parent="", index="end", text=x_name, values=values)
-                name = list(value_calibrate_dict.keys())[0]
-                y_name = name[0:name.find('_Y(0)')]
-                values = [item.value for item in value_calibrate_dict.values()]
-                self.__curve_view.table_calibrate.insert(
-                    parent="", index="end", text=y_name, values=values)
-                return
-
+                # 刷新
+                self.__flush_table_operate(target='calibrate')
             elif cal_item.cal_type == ASAP2EnumCalibrateType.MAP:
                 print('二维表')
                 return
@@ -1187,47 +1179,38 @@ class MeasureCtrl(object):
         """
 
         # 获取选中的单元格
-        selected_iid, selected_col, name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
-                                                                                    table=table))
+        selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                                   table=table))
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
             return
-        print(f"selected_col:{selected_col}")
-        # 若不是修改X或Y列则退出
-        if selected_col != 'X' and selected_col != 'Y':
-            return
-        # 获取要标定的数据项
-        if selected_col == 'X':
-            names = list(self.model.table_calibrate_axis_dict.keys())
-            item = self.model.table_calibrate_axis_dict[names]
-        if item.record_layout.address_type != 'DIRECT':
-            msg = f"尚未支持{item.name}的类型(寻址类型{item.record_layout.address_type})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
-        if item.record_layout.index_mode != 'COLUMN_DIR':
-            msg = f"尚未支持{item.name}的类型(顺序存储类型{item.record_layout.index_mode})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
 
-        if item.cal_type == 'VALUE':
+        # 获取标定对象的名字
+        name = table.item(selected_iid, "text")
+        names = [table.item(iid, "text") for iid in table.get_children()]
+        suffix = f"_X({selected_col})" if \
+        names.index(name) == 0 else f"_Y({selected_col})"
+        # 获取标定对象
+        cal_item = self.model.table_calibrate_axis_dict.get(name + suffix) if \
+        names.index(name) == 0 else self.model.table_calibrate_value_dict.get(name + suffix)
+        # 显示输入框
+        if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
             SubCalibrateValueView(master=table,
-                                  item=item,
+                                  item=cal_item,
                                   geometry=(x,y,w,h),
                                   presenter=self)
         else:
-            msg = f"尚未支持{item.name}的类型(标定类型{item.cal_type})"
+            msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return
 
-    def handler_on_calibrate_value(self, widget: ttk.Spinbox | ttk.Combobox | tk.Entry, item: ASAP2Calibrate):
+    def handler_on_calibrate_value(self, widget: tk.Entry | ttk.Combobox, item: ASAP2Calibrate):
         """
         验证标定数据数据符合规则后，将数据写入ECU，并刷新数据及表格
 
         :param widget: 编辑控件
-        :type widget: ttk.Spinbox | ttk.Combobox | tk.Entry
+        :type widget: tk.Entry | ttk.Combobox
         :param item: 标定数据项
         :type item: ASAP2Calibrate
         """
@@ -1309,12 +1292,12 @@ class MeasureCtrl(object):
         text = widget.get().strip()
         lower_limit = item.lower_limit
         upper_limit = item.upper_limit
-        if isinstance(widget, ttk.Spinbox):  # 若控件为数值输入框
+        if isinstance(widget, tk.Entry):  # 若控件为数值输入框
             # 验证是否为数值
             try:
                 float(text)
             except ValueError:
-                widget.grid_forget()
+                widget.place_forget()
                 msg = f"变量{item.name}的值必须是数字"
                 self.text_log(msg, 'error')
                 self.view.show_warning(msg)
@@ -1324,16 +1307,17 @@ class MeasureCtrl(object):
             if fm:
                 text = f"{float(text): <{fm}f}"
             # 验证是否在指定范围内
+            print(text)
             if float(text) - upper_limit > 1E-6 or \
                     float(text) - lower_limit < -1e-6:
-                widget.grid_forget()
+                widget.place_forget()
                 msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
                 self.text_log(msg, 'error')
                 self.view.show_warning(msg)
                 return
         elif isinstance(widget, ttk.Combobox):  # 若控件为下拉选择框
             pass
-        widget.grid_forget()  # 网格布局中移除编辑控件
+        widget.place_forget()  # 网格布局中移除编辑控件
         _calibrate(item, text)  # 调用标定任务
 
     def handler_on_save_calibrate(self) -> str | None:
@@ -1622,6 +1606,20 @@ class MeasureCtrl(object):
                                                  index="end",
                                                  text="",
                                                  values=values)
+            if self.__curve_view and self.__curve_view.table_calibrate:
+                # 清空所有数据项
+                self.__curve_view.table_calibrate.delete(*self.__curve_view.table_calibrate.get_children())
+                # 刷新显示Curve标定表
+                name = list(self.model.table_calibrate_axis_dict.keys())[0]
+                x_name = name[0:name.find('_X(0)')]
+                values = [item.value for item in self.model.table_calibrate_axis_dict.values()]
+                self.__curve_view.table_calibrate.insert(
+                    parent="", index="end", text=x_name, values=values)
+                name = list(self.model.table_calibrate_value_dict.keys())[0]
+                y_name = name[0:name.find('_Y(0)')]
+                values = [item.value for item in self.model.table_calibrate_value_dict.values()]
+                self.__curve_view.table_calibrate.insert(
+                    parent="", index="end", text=y_name, values=values)
 
     def __flush_label_select_number(self, target:str):
         """

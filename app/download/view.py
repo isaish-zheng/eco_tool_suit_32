@@ -48,15 +48,14 @@ class DownloadView(tk.Tk, GetDpiMixIn):
         # 窗口点击关闭触发的功能
         self.protocol('WM_DELETE_WINDOW', lambda: self.presenter.handler_on_closing())
 
-    @staticmethod
-    def show_warning(msg: str) -> None:
+    def show_warning(self, msg: str) -> None:
         """
         显示警告弹窗
 
         :param msg: 警告内容
         :type msg: str
         """
-        messagebox.showwarning(title='警告', message=msg)
+        messagebox.showwarning(parent=self, title='警告', message=msg)
 
     def set_root(self):
         """
@@ -292,8 +291,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                     relief="sunken", justify='left',
                                     x=20, y=360, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
 
-    @staticmethod
-    def __show_about():
+    def __show_about(self):
         """
         显示关于弹窗
 
@@ -304,12 +302,11 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                '本产品包含: \n'
                '    Eco Download\n'
                '    Eco Measure&Calibrate\n')
-        messagebox.showinfo(title='关于', message=msg)
+        messagebox.showinfo(parent=self, title='关于', message=msg)
 
-    @staticmethod
-    def __show_help():
+    def __show_help(self):
         """
         显示帮助说明弹窗
 
         """
-        messagebox.showinfo(title='帮助', message='1、选择密钥文件\n2、打开下载文件\n3、下载')
+        messagebox.showinfo(parent=self, title='帮助', message='1、选择密钥文件\n2、打开下载文件\n3、下载')
