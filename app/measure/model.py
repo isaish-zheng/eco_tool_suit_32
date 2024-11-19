@@ -4,6 +4,11 @@
 # @Time    : 2024/7/12 上午8:34
 # @version : V1.0.0
 # @function:
+
+
+##############################
+# Module imports
+##############################
 from dataclasses import dataclass
 from enum import Enum
 from queue import Queue
@@ -14,11 +19,6 @@ from xba2l.a2l_lib import Module, MemorySegment, Measurement, Characteristic, \
 
 from eco import eco_pccp
 from srecord import Srecord
-
-
-##############################
-# Module imports
-##############################
 
 
 ##############################
@@ -224,8 +224,8 @@ class ASAP2EnumIndexMode(Enum):
     用于描述二维表值值映射到一维地址空间
 
     Attributes:
-        COLUMN_DIR (int): 存放在列中
-        ROW_DIR (int): 存放在行中
+        COLUMN_DIR (int): 列优先
+        ROW_DIR (int): 行优先
     """
     COLUMN_DIR: int = 0
     ROW_DIR: int = 1
@@ -577,33 +577,6 @@ class ASAP2Calibrate(object):
 ##############################
 # Model API function declarations
 ##############################
-
-@dataclass(slots=True)
-class RecordLayoutElement:
-    """
-    标定变量的存储结构
-
-    :param name: 名称
-    :type name: str
-    :param type: 类型
-    :type type: str
-    :param position: 位置
-    :type position: int
-    :param data_type: 数据类型
-    :type data_type: str
-    :param address_type: 寻址方式
-    :type address_type: str
-    :param index_mode: 索引模式
-    :type index_mode: str
-    """
-    name: str = ''  # 名称
-    type: str = ''  # 类型，FNC_VALUES、AXIS_PTS_X
-    position: int = -1  # 位置
-    data_type: str = ''  # 数据类型
-    address_type: str = ''  # 寻址方式，DIRECT
-    index_mode: str = ''  # 索引模式，COLUMN_DIR、INDEX_INCR、
-
-
 @dataclass(slots=True)
 class SelectMeasureItem(object):
     """
@@ -717,79 +690,6 @@ class MeasureItem(object):
     pid: str = ''  # odt列表对应的pid
 
 
-@dataclass(slots=True)
-class CalibrateItem(object):
-    """
-    标定表格中的数据项类
-
-    :param name: 标定对象名称
-    :type name: str
-    :param value: 物理值
-    :type value: str
-    :param unit: 单位
-    :type unit: str
-
-    :param idx_in_table_calibrate_items: 当前对象在标定表格列表中的索引
-    :type idx_in_table_calibrate_items: int
-    :param idx_in_a2l_calibrations: 当前对象在A2L标定对象列表中索引
-    :type idx_in_a2l_calibrations: int
-
-    :param data_type: 数据类型
-    :type data_type: str
-    :param conversion: 转换方法
-    :type conversion: str
-    :param conversion_type: 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
-    :type conversion_type: str
-    :param compu_tab_ref: 转换映射名称
-    :type compu_tab_ref: str
-    :param compu_vtab: 转换映射表
-    :type compu_vtab: dict[int,str]
-    :param coeffs: 转换系数(A,B,C,D,E,F)
-    :type coeffs: tuple[float, float, float, float, float, float]
-    :param format: 显示格式(整数位数，小数位数)
-    :type format: tuple[int, int]
-
-    :param data_size: 数据大小
-    :type data_size: int
-    :param data_addr: 数据地址
-    :type data_addr: str
-    :param lower_limit: 物理值下限
-    :type lower_limit: float
-    :param upper_limit: 物理值上限
-    :type upper_limit: float
-    :param data: value字段的原始数据序列
-    :type data: bytes
-
-    :param cal_type: 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
-    :type cal_type: str
-    :param record_layout: 标定变量的物理存储结构名称（一维，二维表，三维表等）
-    :type record_layout: RecordLayoutElement
-    """
-    name: str = ''  # 名称
-    value: str = ''  # 物理值
-    unit: str = ''  # 单位
-
-    idx_in_table_calibrate_items: int = -1  # 当前对象在标定表格列表中的索引
-    idx_in_a2l_calibrations: int = -1  # 当前对象在A2L标定对象列表中索引
-
-    data_type: str = ''  # 数据类型
-    conversion: str = ''  # 转换方法名称
-    conversion_type: str = ''  # 转换类型(转换方法中的conversion_type属性，'RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
-    compu_tab_ref: str = ''  # 转换映射名称，若转换类型为TAB_VERB则存在
-    compu_vtab: dict[int, str] = None  # 转换映射表
-    coeffs: tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)，若转换类型为RAT_FUNC则存在
-    format: tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
-
-    data_size: int = -1  # 数据大小
-    data_addr: str = ''  # 数据地址
-    lower_limit: float = None  # 物理值下限
-    upper_limit: float = None  # 物理值上限
-    data: bytes = b''  # value字段的原始数据序列
-
-    cal_type: str = ''  # 标定变量类型，有VALUE、CURVE和MAP，三者之间的区别在干该标定变量是否含有坐标轴(AXIS_DESCR)
-    record_layout: RecordLayoutElement = None  # 标定变量的物理存储结构名称（一维，二维表，三维表等）
-    axis_refs: tuple[str] = ()  # 引用的坐标轴名称，CURVE引用X轴，MAP引用X轴和Y轴
-
 # @singleton
 class MeasureModel(object):
     """
@@ -869,6 +769,6 @@ class MeasureModel(object):
         # 存储线程间通信的队列,测量时的待显示数据
         self.q = Queue()
 
-        self.table_calibrate_axis_dict: dict[str, ASAP2Calibrate] = {}
-        self.table_calibrate_axis2_dict: dict[str, ASAP2Calibrate] = {}
-        self.table_calibrate_value_dict: dict[str, ASAP2Calibrate] = {}
+        self.table_calibrate_axis_dict: dict[str, ASAP2Calibrate] = {} # 存储X轴点的标定对象
+        self.table_calibrate_axis2_dict: dict[str, ASAP2Calibrate] = {} # 存储Y轴点的标定对象
+        self.table_calibrate_value_dict: dict[str, ASAP2Calibrate] = {} # 存储值点的标定对象

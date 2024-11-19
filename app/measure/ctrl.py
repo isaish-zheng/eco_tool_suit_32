@@ -23,7 +23,6 @@ import traceback  # 用于获取异常详细信息
 from typing import Union
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from setuptools.command.build_ext import if_dl
 from xba2l.a2l_base import Options as OptionsParseA2l  # 解析a2l文件
 from xba2l.a2l_lib import AxisPts
 from xba2l.a2l_util import parse_a2l  # 解析a2l文件
@@ -33,12 +32,13 @@ from srecord import Srecord
 from utils import singleton, pad_hex
 
 from .model import MeasureModel, \
-    SelectMeasureItem, MeasureItem, SelectCalibrateItem, CalibrateItem, RecordLayoutElement, \
+    SelectMeasureItem, MeasureItem, SelectCalibrateItem, \
     ASAP2Calibrate, ASAP2RecordLayout, ASAP2CompuMethod, ASAP2AxisDescr, \
     ASAP2FncValues, ASAP2AxisPtsXYZ45, ASAP2CompuVtab, ASAP2AxisPts, \
     ASAP2EnumCalibrateType, ASAP2EnumDataType, ASAP2EnumConversionType, ASAP2EnumByteOrder, \
     ASAP2EnumIndexMode,  ASAP2EnumAddrType, ASAP2EnumIndexOrder, ASAP2EnumAxisType
-from .view import tk, ttk, MeasureView, TkTreeView, SubPropertyView, SubCalibrateCurveView, SubCalibrateValueView
+from .view import tk, ttk, MeasureView, TkTreeView, \
+    SubPropertyView, SubCalibrateCurveView, SubCalibrateValueView, SubCalibrateMapView
 from ..download.model import DownloadModel
 
 
@@ -91,7 +91,7 @@ class MeasureCtrl(object):
         self.__after_id = None  # 窗口定时器id
 
         self.__curve_view = None  # Curve标定界面
-        self.__curve_view = None  # Map标定界面
+        self.__map_view = None  # Map标定界面
 
         # 初始化配置
         self.ini_config()
@@ -508,9 +508,9 @@ class MeasureCtrl(object):
                 self.view.table_select_measure.set(selected_item_id, column_names.index('is_selected'), set_value)
 
                 # 存储原始数据项列表的内容到数据模型
-                idx, table_item = self.__iid2idx_in_table(iid=selected_item_id,
-                                                          table_widget=self.view.table_select_measure,
-                                                          raw_items=self.model.table_select_measure_raw_items)
+                idx, table_item = self.__iid2idx_in_select_table(iid=selected_item_id,
+                                                                 table_widget=self.view.table_select_measure,
+                                                                 raw_items=self.model.table_select_measure_raw_items)
                 self.model.table_select_measure_raw_items[idx] = table_item
 
                 # 刷新
@@ -548,9 +548,9 @@ class MeasureCtrl(object):
                 self.view.table_select_calibrate.set(selected_item_id, column_names.index('is_selected'), set_value)
 
                 # 存储原始数据项列表的内容到数据模型
-                idx, table_item = self.__iid2idx_in_table(iid=selected_item_id,
-                                                          table_widget=self.view.table_select_calibrate,
-                                                          raw_items=self.model.table_select_calibrate_raw_items)
+                idx, table_item = self.__iid2idx_in_select_table(iid=selected_item_id,
+                                                                 table_widget=self.view.table_select_calibrate,
+                                                                 raw_items=self.model.table_select_calibrate_raw_items)
                 self.model.table_select_calibrate_raw_items[idx] = table_item
 
                 # 刷新
@@ -1062,25 +1062,25 @@ class MeasureCtrl(object):
                                       geometry=(x,y,w,h),
                                       presenter=self)
             elif cal_item.cal_type == ASAP2EnumCalibrateType.CURVE:
-                # 标定对象存储字典
+                # 值数据点标定对象存储字典
                 value_calibrate_dict: dict[str, ASAP2Calibrate] = {}
-                axis_calibrate_dict: dict[str, ASAP2Calibrate] = {}
 
                 # 获取X轴的信息
                 axis_pts_ref = cal_item.axis_descrs[0].axis_pts_ref
-                # 获取轴的点数
-                sum_pts = axis_pts_ref.max_axis_points
+                # 获取X轴的点数(1基)
+                max_axis_points = axis_pts_ref.max_axis_points
 
-                for idx in range(sum_pts):
-                    #############################################################################
-                    # 值数据对象
-                    #############################################################################
+                #############################################################################
+                # 值数据点对象
+                #############################################################################
+                for i in range(max_axis_points):
                     value_calibrate = copy.deepcopy(cal_item)
-                    value_calibrate.name += f"_Y({idx})" # 名称
+                    value_calibrate.name += f"_Y({i})" # 名称
                     # value_calibrate.long_identifier = value_calibrate.long_identifier # 描述
                     value_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE # 标定类型
+                    inc = i
                     value_calibrate.address = (cal_item.address +
-                                               idx * ASAP2EnumDataType.get_size(
+                                               inc * ASAP2EnumDataType.get_size(
                                 cal_item.record_layout.fnc_values.data_type.name))  # 数据地址
                     # value_calibrate.record_layout = value_calibrate.record_layout # 数据记录内存布局
                     # value_calibrate.max_diff = value_calibrate.max_diff # 值调整的最大浮点数
@@ -1103,48 +1103,11 @@ class MeasureCtrl(object):
                     # 添加数据项
                     value_calibrate_dict[value_calibrate.name] = value_calibrate
 
-                    #############################################################################
-                    # 轴数据对象
-                    #############################################################################
-                    axis_item = cal_item.axis_descrs[0].axis_pts_ref
-                    axis_calibrate = copy.deepcopy(cal_item)
-                    axis_calibrate.name = axis_item.name + f"_X({idx})"  # 名称
-                    axis_calibrate.long_identifier = axis_item.long_identifier  # 描述
-                    axis_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE  # 标定类型
-                    axis_calibrate.address = (axis_item.address +
-                                               idx * ASAP2EnumDataType.get_size(
-                                axis_item.record_layout.axis_pts_x.data_type.name))  # 数据地址
-
-                    # 数据记录内存布局
-                    fnc_values = ASAP2FncValues(
-                        position=axis_item.record_layout.axis_pts_x.position,
-                        data_type=axis_item.record_layout.axis_pts_x.data_type,
-                        index_mode=value_calibrate.record_layout.fnc_values.index_mode,
-                        address_type=axis_item.record_layout.axis_pts_x.address_type)
-                    # ->轴点内存布局
-                    axis_pts_x = None
-                    axis_calibrate.record_layout = ASAP2RecordLayout(name=None,
-                                                                     fnc_values=fnc_values,
-                                                                     axis_pts_x=axis_pts_x)  # 数据记录内存布局
-                    axis_calibrate.max_diff = axis_item.max_diff  # 值调整的最大浮点数
-                    axis_calibrate.conversion = axis_item.conversion  # 转换方法
-                    axis_calibrate.lower_limit = axis_item.lower_limit  # 物理值下限
-                    axis_calibrate.upper_limit = axis_item.upper_limit  # 物理值上限
-                    axis_calibrate.array_size = None  # 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
-                    axis_calibrate.axis_descrs = None  # 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
-
-                    # 获取原始值，将其转为物理值
-                    rom_cal_addr = self.model.a2l_memory_rom_cal.address
-                    offset = axis_calibrate.address - rom_cal_addr
-                    length = ASAP2EnumDataType.get_size(axis_calibrate.record_layout.fnc_values.data_type.name)
-                    raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
-                                                                                  length=length))
-                    axis_calibrate.data = raw_data  # value字段的原始数据序列
-                    value = self.__get_physical_value(item=axis_calibrate,
-                                                      raw_data=raw_data)
-                    axis_calibrate.value = value  # 物理值
-                    # 添加数据项
-                    axis_calibrate_dict[axis_calibrate.name] = axis_calibrate
+                #############################################################################
+                # 轴数据对象
+                #############################################################################
+                axis_calibrate_dict = self.__assign_calibrate_axis_dict(curve_or_map_item=cal_item,
+                                                                        axis='X')
 
                 # 存储到数据模型
                 self.model.table_calibrate_axis_dict = axis_calibrate_dict
@@ -1157,8 +1120,76 @@ class MeasureCtrl(object):
                 # 刷新
                 self.__flush_table_operate(target='calibrate')
             elif cal_item.cal_type == ASAP2EnumCalibrateType.MAP:
-                print('二维表')
-                return
+                index_mode = cal_item.record_layout.fnc_values.index_mode
+                if index_mode != ASAP2EnumIndexMode.COLUMN_DIR:
+                    msg = f"尚未支持{cal_item.name}的类型(顺序存储类型{index_mode})"
+                    self.text_log(msg, 'error')
+                    self.view.show_warning(msg)
+                    return
+                # 值数据点标定对象存储字典
+                value_calibrate_dict: dict[str, ASAP2Calibrate] = {}
+                # 获取X轴的信息
+                axis_pts_ref = cal_item.axis_descrs[0].axis_pts_ref
+                # 获取X轴的点数(1基),col
+                max_axis_points = axis_pts_ref.max_axis_points
+                # 获取Y轴的信息
+                axis2_pts_ref = cal_item.axis_descrs[1].axis_pts_ref
+                # 获取Y轴的点数(1基),row
+                max_axis2_points = axis2_pts_ref.max_axis_points
+
+                #############################################################################
+                # 值数据点对象
+                #############################################################################
+                for i in range(max_axis2_points):
+                    for j in range(max_axis_points):
+                        value_calibrate = copy.deepcopy(cal_item)
+                        value_calibrate.name += f"_Z({i},{j})" # 名称
+                        # value_calibrate.long_identifier = value_calibrate.long_identifier # 描述
+                        value_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE # 标定类型
+                        inc = i+ j * max_axis2_points # 列优先
+                        value_calibrate.address = (cal_item.address +
+                                                   inc * ASAP2EnumDataType.get_size(
+                                    cal_item.record_layout.fnc_values.data_type.name))  # 数据地址
+                        # value_calibrate.record_layout = value_calibrate.record_layout # 数据记录内存布局
+                        # value_calibrate.max_diff = value_calibrate.max_diff # 值调整的最大浮点数
+                        # value_calibrate.conversion = value_calibrate.conversion # 转换方法
+                        # value_calibrate.lower_limit = value_calibrate.lower_limit # 物理值下限
+                        # value_calibrate.upper_limit = value_calibrate.upper_limit # 物理值上限
+                        value_calibrate.array_size = None # 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+                        value_calibrate.axis_descrs = None # 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+
+                        # 获取原始值，将其转为物理值
+                        rom_cal_addr = self.model.a2l_memory_rom_cal.address
+                        offset = value_calibrate.address - rom_cal_addr
+                        length = ASAP2EnumDataType.get_size(value_calibrate.record_layout.fnc_values.data_type.name)
+                        raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                                      length=length))
+                        value_calibrate.data = raw_data # value字段的原始数据序列
+                        value = self.__get_physical_value(item=value_calibrate,
+                                                          raw_data=raw_data)
+                        value_calibrate.value = value # 物理值
+                        # 添加数据项
+                        value_calibrate_dict[value_calibrate.name] = value_calibrate
+
+                #############################################################################
+                # 轴数据对象
+                #############################################################################
+                axis_calibrate_dict = self.__assign_calibrate_axis_dict(curve_or_map_item=cal_item,
+                                                                        axis='X')
+                axis2_calibrate_dict = self.__assign_calibrate_axis_dict(curve_or_map_item=cal_item,
+                                                                        axis='Y')
+                # 存储到数据模型
+                self.model.table_calibrate_axis_dict = axis_calibrate_dict
+                self.model.table_calibrate_axis2_dict = axis2_calibrate_dict
+                self.model.table_calibrate_value_dict = value_calibrate_dict
+                # 显示Map标定界面
+                self.__map_view = SubCalibrateMapView(master=self.view,
+                                                      axis_calibrate_dict=self.model.table_calibrate_axis_dict,
+                                                      axis2_calibrate_dict=self.model.table_calibrate_axis2_dict,
+                                                      value_calibrate_dict=self.model.table_calibrate_value_dict,
+                                                      presenter=self)
+                # 刷新
+                self.__flush_table_operate(target='calibrate')
             else:
                 msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
                 self.text_log(msg, 'error')
@@ -1170,7 +1201,7 @@ class MeasureCtrl(object):
 
     def handler_on_table_curve_edit(self, e: tk.Event, table: ttk.Treeview):
         """
-        双击标定表格更改Curve标定变量的值
+        双击标定表格更改Curve标定对象的值
 
         :param e: 事件
         :type e: tk.Event
@@ -1193,6 +1224,59 @@ class MeasureCtrl(object):
         # 获取标定对象
         cal_item = self.model.table_calibrate_axis_dict.get(name + suffix) if \
         names.index(name) == 0 else self.model.table_calibrate_value_dict.get(name + suffix)
+        # 显示输入框
+        if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
+            SubCalibrateValueView(master=table,
+                                  item=cal_item,
+                                  geometry=(x,y,w,h),
+                                  presenter=self)
+        else:
+            msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
+            self.text_log(msg, 'error')
+            self.view.show_warning(msg)
+            return
+
+    def handler_on_table_map_edit(self, e: tk.Event, table: ttk.Treeview):
+        """
+        双击标定表格更改Map标定对象的值
+
+        :param e: 事件
+        :type e: tk.Event
+        :param table: 表格
+        :type table: ttk.Treeview
+        """
+
+        # 获取选中的单元格
+        selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                                   table=table))
+        # 未选中单元格则退出
+        if not selected_iid or not selected_col:
+            return
+        # 若选中单元格为Index列则退出
+        if selected_col == "Index":
+            return
+
+        # 获取行名
+        item_index = table.set(selected_iid, "Index")
+
+        cal_item = None
+        if item_index == "Y":
+            # X轴标定对象
+            if selected_col != "X" and int(selected_col) >= 0:
+                names = list(self.model.table_calibrate_axis_dict.keys())
+                cal_item = self.model.table_calibrate_axis_dict[names[int(selected_col)]]
+        elif selected_col == "X":
+            # Y轴标定对象
+            if int(item_index) >= 0:
+                names = list(self.model.table_calibrate_axis2_dict.keys())
+                cal_item = self.model.table_calibrate_axis2_dict[names[int(item_index)]]
+        elif int(selected_col) >= 0 and int(item_index) >= 0:
+            # 值标定对象
+            name = list(self.model.table_calibrate_value_dict.keys())[0]
+            name = name[:name.find("_Z(")] + f"_Z({int(selected_col)},{int(item_index)})"
+            cal_item = self.model.table_calibrate_value_dict[name]
+        else:
+            return
         # 显示输入框
         if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
             SubCalibrateValueView(master=table,
@@ -1292,7 +1376,7 @@ class MeasureCtrl(object):
         text = widget.get().strip()
         lower_limit = item.lower_limit
         upper_limit = item.upper_limit
-        if isinstance(widget, tk.Entry):  # 若控件为数值输入框
+        if type(widget).__name__ == 'Entry':  # 若控件为数值输入框
             # 验证是否为数值
             try:
                 float(text)
@@ -1307,7 +1391,6 @@ class MeasureCtrl(object):
             if fm:
                 text = f"{float(text): <{fm}f}"
             # 验证是否在指定范围内
-            print(text)
             if float(text) - upper_limit > 1E-6 or \
                     float(text) - lower_limit < -1e-6:
                 widget.place_forget()
@@ -1315,7 +1398,7 @@ class MeasureCtrl(object):
                 self.text_log(msg, 'error')
                 self.view.show_warning(msg)
                 return
-        elif isinstance(widget, ttk.Combobox):  # 若控件为下拉选择框
+        elif type(widget).__name__ == 'Combobox':  # 若控件为下拉选择框
             pass
         widget.place_forget()  # 网格布局中移除编辑控件
         _calibrate(item, text)  # 调用标定任务
@@ -1602,24 +1685,36 @@ class MeasureCtrl(object):
                 values = (k,
                           v.value,
                           v.conversion.unit)
-                self.view.table_calibrate.insert(parent="",
-                                                 index="end",
-                                                 text="",
-                                                 values=values)
+                self.view.table_calibrate.insert(
+                    parent="", index="end", text="", values=values)
             if self.__curve_view and self.__curve_view.table_calibrate:
                 # 清空所有数据项
                 self.__curve_view.table_calibrate.delete(*self.__curve_view.table_calibrate.get_children())
                 # 刷新显示Curve标定表
                 name = list(self.model.table_calibrate_axis_dict.keys())[0]
-                x_name = name[0:name.find('_X(0)')]
-                values = [item.value for item in self.model.table_calibrate_axis_dict.values()]
+                x_name = name[:name.find('_X(')]
+                x_values = [item.value for item in self.model.table_calibrate_axis_dict.values()]
                 self.__curve_view.table_calibrate.insert(
-                    parent="", index="end", text=x_name, values=values)
+                    parent="", index="end", text=x_name, values=x_values)
                 name = list(self.model.table_calibrate_value_dict.keys())[0]
-                y_name = name[0:name.find('_Y(0)')]
-                values = [item.value for item in self.model.table_calibrate_value_dict.values()]
+                y_name = name[:name.find('_Y(')]
+                y_values = [item.value for item in self.model.table_calibrate_value_dict.values()]
                 self.__curve_view.table_calibrate.insert(
-                    parent="", index="end", text=y_name, values=values)
+                    parent="", index="end", text=y_name, values=y_values)
+            if self.__map_view and self.__map_view.table_calibrate:
+                # 清空所有数据项
+                self.__map_view.table_calibrate.delete(*self.__map_view.table_calibrate.get_children())
+                # 刷新显示Map标定表
+                x_values = [item.value for item in self.model.table_calibrate_axis_dict.values()]
+                y_values = [item.value for item in self.model.table_calibrate_axis2_dict.values()]
+                z_values = [item.value for item in self.model.table_calibrate_value_dict.values()]
+                values = ['Y', 'Value'] + x_values
+                self.__map_view.table_calibrate.insert(
+                    parent="", index="end", text="", values=values)
+                for i in range(len(y_values)):
+                    values = [str(i), y_values[i]] + z_values[i*len(x_values):(i+1)*len(x_values)] # 按行存储
+                    self.__map_view.table_calibrate.insert(
+                        parent="", index="end", text="", values=values)
 
     def __flush_label_select_number(self, target:str):
         """
@@ -1662,7 +1757,7 @@ class MeasureCtrl(object):
         f(x) = (A*x^2 + B*x + C) / (D*x^2 + E*x + F);
 
         :param item: 测量/标定数据项
-        :type item: MeasureItem | CalibrateItem
+        :type item: MeasureItem | ASAP2Calibrate
         :param raw_data: 原始值字节序列
         :type raw_data: Union[list[int], bytes, bytearray]
         :return: 物理值(数字字符串显示形式，映射则为名称)
@@ -2148,21 +2243,21 @@ class MeasureCtrl(object):
                                           func=self.__display_monitor_value)
 
     @staticmethod
-    def __iid2idx_in_table(iid: str,
-                           table_widget: TkTreeView | ttk.Treeview,
-                           raw_items: list[SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem],
-                           ) -> tuple[int, SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]:
+    def __iid2idx_in_select_table(iid: str,
+                                  table_widget: TkTreeView | ttk.Treeview,
+                                  raw_items: list[SelectMeasureItem | SelectCalibrateItem],
+                                  ) -> tuple[int, SelectMeasureItem | SelectCalibrateItem]:
         """
-        根据表格数据项iid查询Name列的值，根据Name追溯填充此表格数据项列表的相应索引及其数据
+        根据选择表格数据项iid查询Name列的值，根据Name追溯填充此表格数据项列表的相应索引及其数据
 
         :param iid: 表格数据项id
         :type iid: str
         :param table_widget: 表格控件
         :type table_widget: TkTreeView | ttk.Treeview
         :param raw_items: 填充表格数据项的列表
-        :type raw_items: list[SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]
+        :type raw_items: list[SelectMeasureItem | SelectCalibrateItem]
         :return: (index,数据项对象)
-        :rtype: tuple[int, SelectMeasureItem | MeasureItem | SelectCalibrateItem | CalibrateItem]
+        :rtype: tuple[int, SelectMeasureItem | SelectCalibrateItem]
         :raises TypeError: 不支持raw_items元素的类型
         """
 
@@ -2176,10 +2271,6 @@ class MeasureCtrl(object):
             table_item = SelectMeasureItem(*item_values)
         elif isinstance(raw_items[0], SelectCalibrateItem):
             table_item = SelectCalibrateItem(*item_values)
-        elif isinstance(raw_items[0], MeasureItem):
-            table_item = raw_items[idx]
-        elif isinstance(raw_items[0], CalibrateItem):
-            table_item = raw_items[idx]
         else:
             raise TypeError(f'iid2idx尚未支持类型{type(raw_items[0])}')
         # 返回
@@ -2218,9 +2309,11 @@ class MeasureCtrl(object):
                 break
         return iid, col, name, (x, y, w, h)
 
-    def __assign_calibration_dict(self, names: tuple[str,...], dest: dict[str, ASAP2Calibrate]) -> None:
+    def __assign_calibration_dict(self,
+                                  names: tuple[str,...],
+                                  dest: dict[str, ASAP2Calibrate]) -> None:
         """
-        根据标定对象名称获取其属性，并填充到指定的标定对象字典中
+        根据标定对象名称从a2l_calibration_dict获取其属性，并填充到指定的标定对象字典中
 
         Args:
             names (tuple[str]): 存储标定名称的元组
@@ -2401,3 +2494,71 @@ class MeasureCtrl(object):
             cal_item.value = None
             # value字段的原始数据序列
             cal_item.data = None
+
+    def __assign_calibrate_axis_dict(self,
+                                     curve_or_map_item: ASAP2Calibrate,
+                                     axis: str) -> dict[str, ASAP2Calibrate] | None:
+        """
+        获取CURVE或MAP类型的标定对象的轴标定数据,第一个参数块描述X轴,第二个参数块描述Y轴(若存在)
+
+        Args:
+            curve_or_map_item (ASAP2Calibrate): CURVE或MAP类型的标定对象
+            axis (str): 轴名称,'X'或'Y'
+        Returns:
+            dict[str, ASAP2Calibrate] | None: 轴标定数据
+        """
+
+        axis_dict: dict[str, ASAP2Calibrate] = {}  # 轴标定数据字典
+        if axis == 'X':
+            axis_item_ref = curve_or_map_item.axis_descrs[0].axis_pts_ref  # X轴
+        else:
+            axis_item_ref = curve_or_map_item.axis_descrs[1].axis_pts_ref  # Y轴
+        # 获取轴的点数
+        max_axis_points = axis_item_ref.max_axis_points
+        # 获取点标定数据添加至轴标定数据字典
+        for idx in range(max_axis_points):
+            axis_calibrate = copy.deepcopy(curve_or_map_item)
+            axis_calibrate.name = axis_item_ref.name + (f"_X({idx})" if axis == 'X' else f"_Y({idx})")  # 名称
+            axis_calibrate.long_identifier = axis_item_ref.long_identifier  # 描述
+            axis_calibrate.cal_type = ASAP2EnumCalibrateType.VALUE  # 标定类型
+            if axis_item_ref.record_layout.axis_pts_x.index_order == ASAP2EnumIndexOrder.INDEX_INCR:
+                axis_calibrate.address = (axis_item_ref.address +
+                                          idx * ASAP2EnumDataType.get_size(
+                            axis_item_ref.record_layout.axis_pts_x.data_type.name))  # 数据地址
+            else:
+                msg = f"尚未支持{axis_calibrate.name}的类型(地址增长类型{axis_item_ref.record_layout.axis_pts_x.index_order})"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+                return
+            # 数据记录内存布局
+            fnc_values = ASAP2FncValues(
+                position=axis_item_ref.record_layout.axis_pts_x.position,
+                data_type=axis_item_ref.record_layout.axis_pts_x.data_type,
+                index_mode=curve_or_map_item.record_layout.fnc_values.index_mode,
+                address_type=axis_item_ref.record_layout.axis_pts_x.address_type)
+            # ->轴点内存布局
+            axis_pts_x = None
+            axis_calibrate.record_layout = ASAP2RecordLayout(name=None,
+                                                             fnc_values=fnc_values,
+                                                             axis_pts_x=axis_pts_x)  # 数据记录内存布局
+            axis_calibrate.max_diff = axis_item_ref.max_diff  # 值调整的最大浮点数
+            axis_calibrate.conversion = axis_item_ref.conversion  # 转换方法
+            axis_calibrate.lower_limit = axis_item_ref.lower_limit  # 物理值下限
+            axis_calibrate.upper_limit = axis_item_ref.upper_limit  # 物理值上限
+            axis_calibrate.array_size = None  # 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+            axis_calibrate.axis_descrs = None  # 对于CURVE和MAP类型的标定对象,用于指定轴描述的参数,第一个参数块描述X轴,第二个参数块描述Y轴
+
+            # 获取原始值，将其转为物理值
+            rom_cal_addr = self.model.a2l_memory_rom_cal.address
+            offset = axis_calibrate.address - rom_cal_addr
+            length = ASAP2EnumDataType.get_size(axis_calibrate.record_layout.fnc_values.data_type.name)
+            raw_data = (self.model.obj_srecord.get_raw_data_from_cal_data(offset=offset,
+                                                                          length=length))
+            axis_calibrate.data = raw_data  # value字段的原始数据序列
+            value = self.__get_physical_value(item=axis_calibrate,
+                                              raw_data=raw_data)
+            axis_calibrate.value = value  # 物理值
+            # 添加数据项
+            axis_dict[axis_calibrate.name] = axis_calibrate
+        # 返回
+        return axis_dict
