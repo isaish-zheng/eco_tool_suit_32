@@ -227,22 +227,22 @@ class Srecord(object):
             checksum = checksum[-2:]
         return checksum
 
-    def get_epk(self, addr: str) -> str | None:
+    def get_epk(self, addr: int) -> str | None:
         """
         获取epk
 
-        :param addr: epk信息首地址(0x开头的16进制)
-        :type addr: str
+        :param addr: epk信息首地址
+        :type addr: int
         :return: 若存在返回epk(16进制序列)，否则返回None
         :rtype: str or None
         :rtype: bytes
         :raises SrecordException: 不存在指定地址的epk数据区
         """
         for erase_memory_info in self.__erase_memory_infos:
-            if int(erase_memory_info.erase_start_address32, 16) == int(addr, 16):
+            if int(erase_memory_info.erase_start_address32, 16) == addr:
                 return erase_memory_info.erase_data
         else:
-            msg = f"在Srecord文件中不存在首地址为{addr}的epk数据区"
+            msg = f"在Srecord文件中不存在首地址为{hex(addr)}的epk数据区"
             raise SrecordException(msg)
 
     def assign_cal_data(self, addr: int) -> None:

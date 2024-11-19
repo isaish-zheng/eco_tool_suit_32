@@ -12,7 +12,6 @@
 
 import base64  # Base64编码解码模块
 import tkinter
-from tkinter import font
 from pprint import pformat  # 格式化输出模块
 from typing import Any
 
@@ -402,7 +401,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
         """
         # 设置区域容器
         frame = tk.Frame(master=self,
-                         bg='red',
+                         bg=COLOR_FRAME_BG,
                          borderwidth=1)
         # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
         frame.pack(expand=tk.FALSE,
@@ -411,7 +410,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
                    anchor=tk.N)
 
         frame2 = tk.Frame(master=self,
-                          bg='yellow',
+                          bg=COLOR_FRAME_BG,
                           borderwidth=1,
                           height=super().get_dpi(WIDTH_SCROLLER_BAR))
         # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
@@ -572,7 +571,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
         """
         # 设置区域容器
         frame = tk.Frame(master=self,
-                         bg='red',
+                         bg=COLOR_FRAME_BG,
                          borderwidth=1)
         # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
         frame.pack(expand=tk.TRUE,
@@ -581,7 +580,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
                    anchor=tk.N)
 
         frame2 = tk.Frame(master=self,
-                          bg='yellow',
+                          bg=COLOR_FRAME_BG,
                           borderwidth=1,
                           height=super().get_dpi(WIDTH_SCROLLER_BAR))
         # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
@@ -640,14 +639,27 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
             return
-        # 获取标定对象的名字
-        name = self.table_calibrate.item(selected_iid, "text")
-        names = [self.table_calibrate.item(iid, "text") for iid in self.table_calibrate.get_children()]
-        suffix = f"_X({selected_col})" if \
-            names.index(name) == 0 else f"_Y({selected_col})"
-        # 获取标定对象
-        cal_item = self.axis_calibrate_dict.get(name + suffix) if \
-            names.index(name) == 0 else self.value_calibrate_dict.get(name + suffix)
+        # 获取行名
+        item_index = self.table_calibrate.set(selected_iid, "Index")
+
+        cal_item = None
+        if item_index == "Y":
+            # X轴标定对象
+            if selected_col != "X" and int(selected_col) >= 0:
+                names = list(self.axis_calibrate_dict.keys())
+                cal_item = self.axis_calibrate_dict[names[int(selected_col)]]
+        elif selected_col == "X":
+            # Y轴标定对象
+            if int(item_index) >= 0:
+                names = list(self.axis2_calibrate_dict.keys())
+                cal_item = self.axis2_calibrate_dict[names[int(item_index)]]
+        elif int(selected_col) >= 0 and int(item_index) >= 0:
+            # 值标定对象
+            name = list(self.value_calibrate_dict.keys())[0]
+            name = name[:name.find("_Z(")] + f"_Z({int(item_index)},{int(selected_col)})"
+            cal_item = self.value_calibrate_dict[name]
+        else:
+            return
         # 显示属性
         SubPropertyView(master=self,
                         obj=cal_item,

@@ -1614,12 +1614,12 @@ class Measure(object):
         """
         print(txt)
 
-    def get_epk_from_ecu(self, epk_addr: str, epk_len: int) -> str:
+    def get_epk_from_ecu(self, epk_addr: int, epk_len: int) -> str:
         """
         从ecu获取epk
 
-        :param epk_addr: epk信息的首地址(0x开头的16进制)
-        :type epk_addr: str
+        :param epk_addr: epk信息的首地址
+        :type epk_addr: int
         :param epk_len: epk信息的长度(字节数)
         :type epk_len: int
         :returns: epk字符串
@@ -1628,7 +1628,7 @@ class Measure(object):
         epk = []
         self.print_detail('------从ecu获取epk------')
         # 设置内存操作地址
-        addr = int.to_bytes(int(epk_addr, 16), 4, 'big', signed=False)
+        addr = int.to_bytes(epk_addr, 4, 'big', signed=False)
         addr = int.from_bytes(addr, 'little', signed=False)
         self.obj_pccp.set_mta(mta=0,
                               addr_offset=0,
@@ -1724,12 +1724,12 @@ class Measure(object):
             self.print_detail(msg)
             raise EcoPccpException(msg)
 
-    def connect(self, epk_addr: str, epk_len: int) -> tuple[str, bool] | None:
+    def connect(self, epk_addr: int, epk_len: int) -> tuple[str, bool] | None:
         """
         连接流程
 
-        :param epk_addr: epk信息的首地址(0x开头的16进制)
-        :type epk_addr: str
+        :param epk_addr: epk信息的首地址
+        :type epk_addr: int
         :param epk_len: epk信息的长度(字节数)
         :type epk_len: int
         :returns: 若执行成功，返回(epk字符串,ecu和pgm标定去是否匹配)；否则返回None

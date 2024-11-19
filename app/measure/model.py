@@ -729,7 +729,6 @@ class MeasureModel(object):
         self.pgm_epk = ''  # 存储PGM文件解析后的epk
 
         self.a2l_module: Module | None = None  # 存储A2L文件解析后的模块对象
-        self.a2l_epk_addr: str = ''  # 存储A2L文件解析后的epk地址,16进制
         self.a2l_epk = ''  # 存储A2L文件解析后的epk
 
         self.a2l_memory_code: MemorySegment | None = None  # 存储A2L文件解析后的代码段内存段对象

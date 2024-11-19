@@ -212,7 +212,6 @@ class MeasureCtrl(object):
                 version = str(asap2.asap2_version.version_no) + '.' + str(asap2.asap2_version.upgrade_no)
 
                 # 获取a2l文件的epk信息
-                self.model.a2l_epk_addr = hex(module.mod_par.addr_epks[0])
                 self.model.a2l_epk = module.mod_par.epk
                 # 获取a2l文件的内存段信息
                 for memory_segment in module.mod_par.memory_segments:
@@ -281,7 +280,7 @@ class MeasureCtrl(object):
                 # 获取程序文件处理对象
                 self.model.obj_srecord = Srecord(self.model.opened_pgm_filepath)
                 # 获取程序文件epk信息
-                epk_data = self.model.obj_srecord.get_epk(self.model.a2l_epk_addr)
+                epk_data = self.model.obj_srecord.get_epk(self.model.a2l_memory_epk_data.address)
                 if epk_data:
                     self.model.pgm_epk = bytes.fromhex(epk_data).decode(encoding='utf-8').rstrip('\x00')
                 # 获取程序信息
@@ -831,7 +830,9 @@ class MeasureCtrl(object):
             # 创建测量对象
             self.__create_measure_obj()
             # 建立连接
-            self.__pool.submit(self.model.obj_measure.connect, self.model.a2l_epk_addr, len(self.model.a2l_epk)).add_done_callback(_callback)
+            self.__pool.submit(self.model.obj_measure.connect,
+                               self.model.a2l_memory_epk_data.address,
+                               len(self.model.a2l_epk)).add_done_callback(_callback)
             # print("当前线程数量为", threading.active_count())
             # print("所有线程的具体信息", threading.enumerate())
             # print("当前线程具体信息", threading.current_thread())
@@ -1208,33 +1209,35 @@ class MeasureCtrl(object):
         :param table: 表格
         :type table: ttk.Treeview
         """
+        try:
+            # 获取选中的单元格
+            selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                                       table=table))
+            # 未选中单元格则退出
+            if not selected_iid or not selected_col:
+                return
 
-        # 获取选中的单元格
-        selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
-                                                                                                   table=table))
-        # 未选中单元格则退出
-        if not selected_iid or not selected_col:
-            return
-
-        # 获取标定对象的名字
-        name = table.item(selected_iid, "text")
-        names = [table.item(iid, "text") for iid in table.get_children()]
-        suffix = f"_X({selected_col})" if \
-        names.index(name) == 0 else f"_Y({selected_col})"
-        # 获取标定对象
-        cal_item = self.model.table_calibrate_axis_dict.get(name + suffix) if \
-        names.index(name) == 0 else self.model.table_calibrate_value_dict.get(name + suffix)
-        # 显示输入框
-        if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
-            SubCalibrateValueView(master=table,
-                                  item=cal_item,
-                                  geometry=(x,y,w,h),
-                                  presenter=self)
-        else:
-            msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
+            # 获取标定对象的名字
+            name = table.item(selected_iid, "text")
+            names = [table.item(iid, "text") for iid in table.get_children()]
+            suffix = f"_X({selected_col})" if \
+            names.index(name) == 0 else f"_Y({selected_col})"
+            # 获取标定对象
+            cal_item = self.model.table_calibrate_axis_dict.get(name + suffix) if \
+            names.index(name) == 0 else self.model.table_calibrate_value_dict.get(name + suffix)
+            # 显示输入框
+            if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
+                SubCalibrateValueView(master=table,
+                                      item=cal_item,
+                                      geometry=(x,y,w,h),
+                                      presenter=self)
+            else:
+                msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
 
     def handler_on_table_map_edit(self, e: tk.Event, table: ttk.Treeview):
         """
@@ -1245,49 +1248,51 @@ class MeasureCtrl(object):
         :param table: 表格
         :type table: ttk.Treeview
         """
+        try:
+            # 获取选中的单元格
+            selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
+                                                                                                       table=table))
+            # 未选中单元格则退出
+            if not selected_iid or not selected_col:
+                return
+            # 若选中单元格为Index列则退出
+            if selected_col == "Index":
+                return
 
-        # 获取选中的单元格
-        selected_iid, selected_col, selected_name, (x, y, w, h) = (self.get_selected_cell_in_table(e=e,
-                                                                                                   table=table))
-        # 未选中单元格则退出
-        if not selected_iid or not selected_col:
-            return
-        # 若选中单元格为Index列则退出
-        if selected_col == "Index":
-            return
+            # 获取行名
+            item_index = table.set(selected_iid, "Index")
 
-        # 获取行名
-        item_index = table.set(selected_iid, "Index")
-
-        cal_item = None
-        if item_index == "Y":
-            # X轴标定对象
-            if selected_col != "X" and int(selected_col) >= 0:
-                names = list(self.model.table_calibrate_axis_dict.keys())
-                cal_item = self.model.table_calibrate_axis_dict[names[int(selected_col)]]
-        elif selected_col == "X":
-            # Y轴标定对象
-            if int(item_index) >= 0:
-                names = list(self.model.table_calibrate_axis2_dict.keys())
-                cal_item = self.model.table_calibrate_axis2_dict[names[int(item_index)]]
-        elif int(selected_col) >= 0 and int(item_index) >= 0:
-            # 值标定对象
-            name = list(self.model.table_calibrate_value_dict.keys())[0]
-            name = name[:name.find("_Z(")] + f"_Z({int(selected_col)},{int(item_index)})"
-            cal_item = self.model.table_calibrate_value_dict[name]
-        else:
-            return
-        # 显示输入框
-        if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
-            SubCalibrateValueView(master=table,
-                                  item=cal_item,
-                                  geometry=(x,y,w,h),
-                                  presenter=self)
-        else:
-            msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
-            self.text_log(msg, 'error')
-            self.view.show_warning(msg)
-            return
+            cal_item = None
+            if item_index == "Y":
+                # X轴标定对象
+                if selected_col != "X" and int(selected_col) >= 0:
+                    names = list(self.model.table_calibrate_axis_dict.keys())
+                    cal_item = self.model.table_calibrate_axis_dict[names[int(selected_col)]]
+            elif selected_col == "X":
+                # Y轴标定对象
+                if int(item_index) >= 0:
+                    names = list(self.model.table_calibrate_axis2_dict.keys())
+                    cal_item = self.model.table_calibrate_axis2_dict[names[int(item_index)]]
+            elif int(selected_col) >= 0 and int(item_index) >= 0:
+                # 值标定对象
+                name = list(self.model.table_calibrate_value_dict.keys())[0]
+                name = name[:name.find("_Z(")] + f"_Z({int(item_index)},{int(selected_col)})"
+                cal_item = self.model.table_calibrate_value_dict[name]
+            else:
+                return
+            # 显示输入框
+            if cal_item.cal_type == ASAP2EnumCalibrateType.VALUE:
+                SubCalibrateValueView(master=table,
+                                      item=cal_item,
+                                      geometry=(x,y,w,h),
+                                      presenter=self)
+            else:
+                msg = f"尚未支持{cal_item.name}的类型(标定类型{cal_item.cal_type})"
+                self.text_log(msg, 'error')
+                self.view.show_warning(msg)
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
 
     def handler_on_calibrate_value(self, widget: tk.Entry | ttk.Combobox, item: ASAP2Calibrate):
         """
@@ -1372,36 +1377,39 @@ class MeasureCtrl(object):
             except Exception as e:
                 self.text_log(f'发生异常 {e}', 'error')
                 self.text_log(f"{traceback.format_exc()}", 'error')
-
-        text = widget.get().strip()
-        lower_limit = item.lower_limit
-        upper_limit = item.upper_limit
-        if type(widget).__name__ == 'Entry':  # 若控件为数值输入框
-            # 验证是否为数值
-            try:
-                float(text)
-            except ValueError:
-                widget.place_forget()
-                msg = f"变量{item.name}的值必须是数字"
-                self.text_log(msg, 'error')
-                self.view.show_warning(msg)
-                return
-            # 格式化
-            fm = item.conversion.format[1:]
-            if fm:
-                text = f"{float(text): <{fm}f}"
-            # 验证是否在指定范围内
-            if float(text) - upper_limit > 1E-6 or \
-                    float(text) - lower_limit < -1e-6:
-                widget.place_forget()
-                msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
-                self.text_log(msg, 'error')
-                self.view.show_warning(msg)
-                return
-        elif type(widget).__name__ == 'Combobox':  # 若控件为下拉选择框
-            pass
-        widget.place_forget()  # 网格布局中移除编辑控件
-        _calibrate(item, text)  # 调用标定任务
+        try:
+            text = widget.get().strip()
+            lower_limit = item.lower_limit
+            upper_limit = item.upper_limit
+            if type(widget).__name__ == 'Entry':  # 若控件为数值输入框
+                # 验证是否为数值
+                try:
+                    float(text)
+                except ValueError:
+                    widget.place_forget()
+                    msg = f"变量{item.name}的值必须是数字"
+                    self.text_log(msg, 'error')
+                    self.view.show_warning(msg)
+                    return
+                # 格式化
+                fm = item.conversion.format[1:]
+                if fm:
+                    text = f"{float(text): <{fm}f}"
+                # 验证是否在指定范围内
+                if float(text) - upper_limit > 1E-6 or \
+                        float(text) - lower_limit < -1e-6:
+                    widget.place_forget()
+                    msg = f"变量{item.name}的设定值{text}不在范围[{lower_limit},{upper_limit}]内"
+                    self.text_log(msg, 'error')
+                    self.view.show_warning(msg)
+                    return
+            elif type(widget).__name__ == 'Combobox':  # 若控件为下拉选择框
+                pass
+            widget.place_forget()  # 网格布局中移除编辑控件
+            _calibrate(item, text)  # 调用标定任务
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
 
     def handler_on_save_calibrate(self) -> str | None:
         """
