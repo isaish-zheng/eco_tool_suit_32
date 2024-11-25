@@ -538,7 +538,7 @@ class ASAP2AxisDescr:
 @dataclass(slots=True)
 class ASAP2Calibrate(object):
     """
-    标定表格中的数据项类
+    标定对象类
 
     Attributes:
         name (str): 名称
@@ -568,6 +568,43 @@ class ASAP2Calibrate(object):
     # 可选
     array_size: int | None = None
     axis_descrs: list[ASAP2AxisDescr] | None = None
+
+    # 自定义
+    value: str | None = None
+    data: bytes | None = None
+
+
+@dataclass(slots=True)
+class ASAP2Measure(object):
+    """
+    测量对象类
+
+    Attributes:
+        name (str): 名称
+        long_identifier (str): 描述
+        data_type (ASAP2EnumCalibrateType): 数据类型
+        conversion (ASAP2CompuMethod): 转换方法
+        resolution (int): 分辨率,暂未使用
+        accuracy (float): 精度,暂未使用
+        lower_limit (float): 物理值下限
+        upper_limit (float): 物理值上限
+        array_size (int): 对于VAL_BLK和ASCII类型的标定对象，指定固定值或字符的数量
+        address (int): 内存地址
+        value (str): 物理值
+        data (bytes): value字段的原始数据序列
+    """
+    name: str | None = None
+    long_identifier: str | None = None
+    data_type: ASAP2EnumDataType | None = None
+    conversion: ASAP2CompuMethod | None = None
+    resolution: int | None = None
+    accuracy: float | None = None
+    lower_limit: float | None = None
+    upper_limit: float | None = None
+
+    # 可选
+    array_size: int | None = None
+    address: int | None = None
 
     # 自定义
     value: str | None = None

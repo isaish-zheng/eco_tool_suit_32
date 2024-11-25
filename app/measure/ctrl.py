@@ -1954,21 +1954,13 @@ class MeasureCtrl(object):
                                     signed=True)  # 原始值
         elif data_type == ASAP2EnumDataType.FLOAT32_IEEE:
             raw_data = pack('!f', value)  # 原始值
-            value = self.__get_physical_value(item, raw_data) # 重新计算浮点数
         else:
             msg = f"无法解析{item.name}的原始值,尚未支持类型{data_type}"
             self.text_log(msg, 'error')
             self.view.show_warning(msg)
             return None, None
-
-        # 对于转换映射类型，将数值转为名称再返回
-        if conversion_type == ASAP2EnumConversionType.TAB_VERB:
-            vtab_read_dict = item.conversion.compu_tab_ref.read_dict  # 数值映射字典，数值->名称
-            value = ''.join(
-                    [vtab_read_dict[value], ':',
-                     pad_hex(hex(value), ASAP2EnumDataType.get_size(data_type.name))])
         # 返回
-        return str(value), raw_data
+        return self.__get_physical_value(item, raw_data), raw_data
 
     def __get_daqs(self, daqs_cfg: dict[int, dict[str, int]]) -> dict[int, dict[int, list[MeasureItem]]]:
         """

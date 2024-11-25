@@ -399,25 +399,26 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
           Y| y0| y1| y*|  *|
 
         """
-        # 设置区域容器
-        frame = tk.Frame(master=self,
+        # 设置区域容器_表格
+        frame2 = tk.Frame(master=self,
                          bg=COLOR_FRAME_BG,
                          borderwidth=1)
         # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
+        frame2.pack(expand=tk.FALSE,
+                   fill=tk.X,
+                   side=tk.TOP,
+                   anchor=tk.N)
+        # 设置区域容器_滚动条
+        frame = tk.Frame(master=self,
+                         bg=COLOR_FRAME_BG,
+                         borderwidth=1,
+                         height=super().get_dpi(WIDTH_SCROLLER_BAR))
+        # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
         frame.pack(expand=tk.FALSE,
                    fill=tk.X,
                    side=tk.TOP,
                    anchor=tk.N)
 
-        frame2 = tk.Frame(master=self,
-                          bg=COLOR_FRAME_BG,
-                          borderwidth=1,
-                          height=super().get_dpi(WIDTH_SCROLLER_BAR))
-        # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
-        frame2.pack(expand=tk.TRUE,
-                    fill=tk.X,
-                    side=tk.TOP,
-                    anchor=tk.N)
 
         # 设置表格风格
         style = ttk.Style()
@@ -425,7 +426,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
                         font=FONT_BUTTON,
                         rowheight=super().get_dpi(18))
         # 创建表格
-        self.table_calibrate = ttk.Treeview(master=frame,
+        self.table_calibrate = ttk.Treeview(master=frame2,
                                             show=["tree", "headings"],
                                             selectmode="extended",
                                             style="Custom.Treeview",
@@ -448,7 +449,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
                                   side=tk.LEFT,
                                   anchor=tk.N)
         # 创建一个水平滚动条组件，并将它与组件绑定
-        x_scrollbar = ttk.Scrollbar(master=frame2,
+        x_scrollbar = ttk.Scrollbar(master=frame,
                                     orient='horizontal',
                                     command=self.table_calibrate.xview)
         x_scrollbar.pack(expand=tk.TRUE,
@@ -569,25 +570,27 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
            1| y1|z10|z11|  *|
            *| y*|  *|  *|  *|
         """
-        # 设置区域容器
+        # 设置区域容器_滚动条
         frame = tk.Frame(master=self,
-                         bg=COLOR_FRAME_BG,
-                         borderwidth=1)
-        # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
-        frame.pack(expand=tk.TRUE,
-                   fill=tk.BOTH,
-                   side=tk.TOP,
-                   anchor=tk.N)
-
-        frame2 = tk.Frame(master=self,
                           bg=COLOR_FRAME_BG,
                           borderwidth=1,
                           height=super().get_dpi(WIDTH_SCROLLER_BAR))
         # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
-        frame2.pack(expand=tk.FALSE,
+        frame.pack(expand=tk.FALSE,
                     fill=tk.X,
-                    side=tk.TOP,
+                    side=tk.BOTTOM,
                     anchor=tk.N)
+        # 设置区域容器_表格
+        frame2 = tk.Frame(master=self,
+                         bg=COLOR_FRAME_BG,
+                         borderwidth=1)
+        # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
+        frame2.pack(expand=tk.TRUE,
+                   fill=tk.BOTH,
+                   side=tk.TOP,
+                   anchor=tk.N)
+
+
 
         # 设置表格风格
         style = ttk.Style()
@@ -595,7 +598,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
                         font=FONT_BUTTON,
                         rowheight=super().get_dpi(18))
         # 创建表格
-        self.table_calibrate = ttk.Treeview(master=frame,
+        self.table_calibrate = ttk.Treeview(master=frame2,
                                             show=["headings"],
                                             selectmode="extended",
                                             style="Custom.Treeview",
@@ -617,7 +620,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
                                   side=tk.LEFT,
                                   anchor=tk.N)
         # 创建一个水平滚动条组件，并将它与组件绑定
-        x_scrollbar = ttk.Scrollbar(master=frame2,
+        x_scrollbar = ttk.Scrollbar(master=frame,
                                     orient='horizontal',
                                     command=self.table_calibrate.xview)
         x_scrollbar.pack(expand=tk.TRUE,
