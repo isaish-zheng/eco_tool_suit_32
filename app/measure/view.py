@@ -228,12 +228,21 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
         if self.obj:
             attributes = _get_attributes(self.obj)
             for attribute in attributes:
-                self.table_property.insert(parent="",
-                                           index="end",
-                                           text="",
-                                           values=(attribute, getattr(self.obj, attribute)),
-                                           tags=['tag_1', ],
-                                           )
+                if attribute == "data":
+                    self.table_property.insert(parent="",
+                                               index="end",
+                                               text="",
+                                               values=(attribute, "".join(["0x", getattr(self.obj, attribute).hex()])),
+                                               tags=['tag_1', ],
+                                               )
+                else:
+                    self.table_property.insert(parent="",
+                                               index="end",
+                                               text="",
+                                               values=(attribute, getattr(self.obj, attribute)),
+                                               tags=['tag_1', ],
+                                               )
+
 
 
 class SubCalibrateValueView(GetDpiMixIn):

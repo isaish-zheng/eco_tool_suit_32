@@ -582,15 +582,6 @@ class MeasureCtrl(object):
                         if idx_in_a2l >= len(self.model.a2l_measurements):
                             msg = f'数据项{self.model.table_measure_items[idx_in_table].name}不存在于A2L数据对象列表中'
                             raise ValueError(msg)
-            if target == 'calibrate':
-                for idx_in_table in range(len(self.model.table_calibrate_items)):
-                    for idx_in_a2l in range(len(self.model.a2l_calibrations)):
-                        if (self.model.table_calibrate_items[idx_in_table].name ==
-                                self.model.a2l_calibrations[idx_in_a2l].name):
-                            idx_map_list.append((idx_in_table, idx_in_a2l))
-                        if idx_in_a2l >= len(self.model.a2l_calibrations):
-                            msg = f'数据项{self.model.table_calibrate_items[idx_in_table].name}不存在于A2L数据对象列表中'
-                            raise ValueError(msg)
             return idx_map_list
 
         try:

@@ -297,7 +297,7 @@ class Srecord(object):
         :type offset: int
         :param length: 长度
         :type length: int
-        :returns: 原始值数据序列
+        :returns: 原始值数据序列(大端)
         :rtype: bytes
         :raises SrecordException: 尚未指定标定数据区；参数超出指定标定数据区的范围
         """

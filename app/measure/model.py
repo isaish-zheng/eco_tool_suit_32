@@ -592,6 +592,13 @@ class ASAP2Measure(object):
         address (int): 内存地址
         value (str): 物理值
         data (bytes): value字段的原始数据序列
+        rate (str): 速率
+        element_size (int): odt元素大小
+        element_addr (str): odt元素地址
+        daq_number (int): daq列表序号,1:20ms;2:100ms
+        odt_number (int): odt列表序号
+        element_number (int): odt元素序号
+        pid (str): odt列表对应的pid
     """
     name: str | None = None
     long_identifier: str | None = None
@@ -609,6 +616,17 @@ class ASAP2Measure(object):
     # 自定义
     value: str | None = None
     data: bytes | None = None
+
+    rate: str | None = None # 速率
+
+    element_size: int | None = None  # odt元素大小
+    element_addr: str | None = None  # odt元素地址
+
+    daq_number: int | None = None  # daq列表序号,1:20ms;2:100ms
+    odt_number: int | None = None  # odt列表序号
+    element_number: int | None = None  # odt元素序号
+
+    pid: str | None = None  # odt列表对应的pid
 
 
 ##############################
@@ -773,7 +791,6 @@ class MeasureModel(object):
         self.a2l_memory_ram_cal: MemorySegment | None = None  # 存储A2L文件解析后的ram标定内存段对象
         self.a2l_memory_rom_cal: MemorySegment | None = None  # 存储A2L文件解析后的rom标定内存段对象
         self.a2l_measurements: list[Measurement] = []  # 存储A2L文件解析后的测量对象列表
-        self.a2l_calibrations: list[Characteristic] = []  # 存储A2L文件解析后的标定对象列表
         self.a2l_calibration_dict: dict[str, Characteristic] = {}  # 存储A2L文件解析后的标定(可调整)对象字典
 
         self.a2l_record_layout_dict: dict[str, RecordLayout] = {}  # 存储A2L文件解析后的标定变量内存布局
