@@ -409,7 +409,7 @@ class DownloadCtrl(object):
             measure_view.set_select_measure_frame(model=measure_model)
             measure_view.set_measure_frame(model=measure_model)
             measure_view.set_select_calibrate_frame(model=measure_model)
-            measure_view.set_calibrate_frame(model=measure_model)
+            # measure_view.set_calibrate_frame(model=measure_model)
 
             # 启动时显示上一次打开的文件信息和数据
             measure_ctrl.deal_file()

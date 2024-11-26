@@ -157,7 +157,6 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
                      super().get_dpi(self.WIDTH_ROOT_WINDOW)) / 2)
         y_pos = int((self.winfo_screenheight() -
                      super().get_dpi(self.HEIGHT_ROOT_WINDOW)) / 2)
-        self.wm_attributes("-topmost", 1)  # 置顶
         self.geometry(
             f"{super().get_dpi(self.WIDTH_ROOT_WINDOW)}x"
             f"{super().get_dpi(self.HEIGHT_ROOT_WINDOW)}"
@@ -228,7 +227,7 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
         if self.obj:
             attributes = _get_attributes(self.obj)
             for attribute in attributes:
-                if attribute == "data":
+                if attribute == "data" and getattr(self.obj, attribute):
                     self.table_property.insert(parent="",
                                                index="end",
                                                text="",
@@ -242,7 +241,6 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
                                                values=(attribute, getattr(self.obj, attribute)),
                                                tags=['tag_1', ],
                                                )
-
 
 
 class SubCalibrateValueView(GetDpiMixIn):
@@ -390,9 +388,9 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
         # 窗口标题
         self.title(f"Curve Calibrate")
         # 窗口位置
-        self.wm_attributes("-topmost", 1)  # 置顶
         self.wm_geometry("+%d+%d" % (self.master.winfo_rootx(), self.master.winfo_rooty())) # 位置
         self.resizable(width=True, height=True) # 窗口大小可变
+        self.wm_attributes("-topmost", 1)  # 置顶
         # 窗口点击关闭触发的功能
         self.protocol('WM_DELETE_WINDOW', lambda: self.__del__())
         with open('tmp.ico', 'wb') as tmp:
@@ -560,9 +558,9 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
         # 窗口标题
         self.title(f"Map Calibrate")
         # 窗口位置
-        self.wm_attributes("-topmost", 1)  # 置顶
         self.wm_geometry("+%d+%d" % (self.master.winfo_rootx(), self.master.winfo_rooty())) # 位置
         self.resizable(width=True, height=True) # 窗口大小可变
+        self.wm_attributes("-topmost", 1)  # 置顶
         # 窗口点击关闭触发的功能
         self.protocol('WM_DELETE_WINDOW', lambda: self.__del__())
         with open('tmp.ico', 'wb') as tmp:
@@ -676,6 +674,186 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
         SubPropertyView(master=self,
                         obj=cal_item,
                         target='calibrate')
+
+
+class CalibrateView(tk.Toplevel, GetDpiMixIn):
+    """
+    标定界面
+
+    :param master: 父窗口
+    :type master: tk.Toplevel
+    :param presenter: presenter中含一系列方法，用于处理界面事件
+    :type presenter: Any
+    """
+
+    WIDTH_ROOT_WINDOW = 500
+    HEIGHT_ROOT_WINDOW = 600
+
+    def __init__(self,
+                 master: tk.Toplevel,
+                 presenter: Any
+                 ) -> None:
+        """构造函数"""
+        # 操作系统使用程序自身的dpi适配
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        super().__init__(master=master)
+
+        self.master = master
+        self.presenter = presenter
+
+        self.table_calibrate = None
+
+        self.set_root()
+        # 子窗口捕捉所有事件
+        # self.grab_set()
+        self.transient(master)
+
+        self.set_calibrate_frame()
+
+    def __del__(self):
+        """
+        析构函数，窗口销毁时，将table_calibrate置为None
+
+        """
+        self.table_calibrate = None
+        self.destroy()
+
+    def set_root(self) -> None:
+        """
+        设置根窗口
+
+        """
+        # 窗口标题
+        self.title(f"Calibrate")
+        # 窗口尺寸和位置
+        x_pos = int((self.winfo_screenwidth() -
+                     super().get_dpi(self.WIDTH_ROOT_WINDOW)) / 2)
+        y_pos = int((self.winfo_screenheight() -
+                     super().get_dpi(self.HEIGHT_ROOT_WINDOW)) / 2)
+        self.geometry(
+            f"{super().get_dpi(self.WIDTH_ROOT_WINDOW)}x"
+            f"{super().get_dpi(self.HEIGHT_ROOT_WINDOW)}"
+            f"+{x_pos}+{y_pos}")
+        self.resizable(width=False, height=False)
+        # 窗口点击关闭触发的功能
+        self.protocol('WM_DELETE_WINDOW', lambda: self.__del__())
+        # root.overrideredirect(True)  # 去除标题栏
+        with open('tmp.ico', 'wb') as tmp:
+            tmp.write(base64.b64decode(icon.img))
+        self.iconbitmap('tmp.ico')
+        os.remove('tmp.ico')
+
+    def set_calibrate_frame(self):
+        """
+        设置标定数据项界面
+
+        """
+
+        # 设置区域容器
+        self.__calibrate_frame = TkFrame(master=self,
+                                         bg=COLOR_FRAME_BG, borderwidth=1,
+                                         x=0,
+                                         y=0,
+                                         width=self.WIDTH_ROOT_WINDOW,
+                                         height=self.HEIGHT_ROOT_WINDOW)
+
+        # 设置显示数目标签
+        self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
+                                              bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
+                                              text='', font=FONT_BUTTON,
+                                              relief="sunken", justify='left',
+                                              anchor='c', wraplength=WIDTH_LABEL,
+                                              x=self.WIDTH_ROOT_WINDOW - 10 - WIDTH_BUTTON,
+                                              y=0,
+                                              width=WIDTH_BUTTON,
+                                              height=HEIGHT_BUTTON)
+
+        # 设置保存至文件按钮
+        self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
+                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                           borderwidth=0,
+                                           text="保存至文件", font=FONT_BUTTON,
+                                           command=lambda: self.presenter.handler_on_save_calibrate(),
+                                           x=20,
+                                           y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                                           width=WIDTH_BUTTON,
+                                           height=HEIGHT_BUTTON,
+                                           state='normal')
+
+        # 设置从RAM上传按钮
+        self.btn_upload_calibrate = TkButton(master=self.__calibrate_frame,
+                                             bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                             activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                             activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                             borderwidth=0,
+                                             text="从RAM上传", font=FONT_BUTTON,
+                                             command=lambda: self.presenter.handler_on_upload_calibrate(),
+                                             x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON * 2 - 30,
+                                             y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                                             width=WIDTH_BUTTON,
+                                             height=HEIGHT_BUTTON,
+                                             state='normal')
+
+        # 设置刷写至ROM按钮
+        self.btn_program_calibrate = TkButton(master=self.__calibrate_frame,
+                                              bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                              activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                              activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                              borderwidth=0,
+                                              text="刷写至ROM", font=FONT_BUTTON,
+                                              command=lambda: self.presenter.handler_on_program_calibrate(),
+                                              x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON - 20,
+                                              y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                                              width=WIDTH_BUTTON,
+                                              height=HEIGHT_BUTTON,
+                                              state='normal')
+
+        # 设置表格风格
+        style = ttk.Style()
+        style.configure("Custom.Treeview",
+                        font=FONT_BUTTON,
+                        rowheight=super().get_dpi(18), )
+        # 设置表格
+        self.table_calibrate = TkTreeView(master=self.__calibrate_frame,
+                                          show="headings",
+                                          selectmode="extended",
+                                          style="Custom.Treeview",
+                                          x=0,
+                                          y=HEIGHT_BUTTON,
+                                          width=self.WIDTH_ROOT_WINDOW - WIDTH_SCROLLER_BAR,
+                                          height=self.HEIGHT_ROOT_WINDOW - 90)
+        # self.table_calibrate.column("#0", width=420, minwidth=100)
+        # 设置滚动条
+        self.table_calibrate.create_scrollbar()
+        # 绑定数据项选择事件
+        # self.table_calibrate.bind("<<TreeviewSelect>>",
+        #                         lambda e: _pop_menu(e))
+        # 设置表头
+        self.table_calibrate["columns"] = ("Name", "Value", "Unit")
+        self.table_calibrate.column("Name", anchor='w', width=super().get_dpi(255))  # 表示列,不显示
+        self.table_calibrate.column("Value", anchor='w', width=super().get_dpi(95))
+        self.table_calibrate.column("Unit", anchor='w', width=super().get_dpi(29))
+        self.table_calibrate.heading("Name", anchor='w', text="Name")  # 显示表头
+        self.table_calibrate.heading("Value", anchor='w', text="Value")
+        self.table_calibrate.heading("Unit", anchor='w', text="Unit")
+
+        # 鼠标右键菜单
+        table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
+                             bg=COLOR_FRAME_BG, fg='black',
+                             activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
+        table_menu.add_command(label="删除",
+                               command=lambda: self.presenter.handler_on_delete_item(target='calibrate'),
+                               )
+        table_menu.add_command(label="属性",
+                               command=lambda: self.presenter.handler_on_show_property(
+                                   table=self.table_calibrate, target='calibrate'),
+                               )
+        self.table_calibrate.bind("<Button-3>",
+                                  lambda e:table_menu.post(e.x_root + 10, e.y_root))
+        self.table_calibrate.bind('<Double-1>',
+                                  lambda e: self.presenter.handler_on_table_calibrate_edit(e, self.table_calibrate))
 
 
 # @singleton
@@ -1161,126 +1339,126 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                )
         self.table_select_calibrate.bind("<Button-3>", lambda e: table_menu.post(e.x_root + 10, e.y_root))
 
-    def set_calibrate_frame(self, model: MeasureModel):
-        """
-        设置标定数据项界面
-
-        :param model: 视图的数据模型
-        :type model: MeasureModel
-        """
-
-        # 设置区域容器
-        self.__calibrate_frame = TkFrame(master=self,
-                                         bg=COLOR_FRAME_BG, borderwidth=1,
-                                         x=self.WIDTH_SELECTION_FRAME * 2,
-                                         y=HEIGHT_WINDOW_MENU_BAR + 1,
-                                         width=self.WIDTH_SELECTION_FRAME,
-                                         height=self.HEIGHT_SELECTION_FRAME)
-
-        # 设置显示数目标签
-        self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
-                                              bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
-                                              text='', font=FONT_BUTTON,
-                                              relief="sunken", justify='left',
-                                              anchor='c', wraplength=WIDTH_LABEL,
-                                              x=self.WIDTH_SELECTION_FRAME - 10 - WIDTH_BUTTON,
-                                              y=0,
-                                              width=WIDTH_BUTTON,
-                                              height=HEIGHT_BUTTON)
-
-        label_title = TkLabel(master=self.__calibrate_frame,
-                              bg=COLOR_FRAME_BG, fg='black', borderwidth=0,
-                              text='标定', font=FONT_BUTTON,
-                              relief="sunken", justify='left',
-                              anchor='c', wraplength=WIDTH_LABEL,
-                              x=(self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON - WIDTH_SCROLLER_BAR) / 2,
-                              y=0,
-                              width=WIDTH_BUTTON,
-                              height=HEIGHT_BUTTON)
-
-        # 设置保存按钮
-        self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
-                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                           borderwidth=0,
-                                           text="保存至文件", font=FONT_BUTTON,
-                                           command=lambda: self.presenter.handler_on_save_calibrate(),
-                                           x=20,
-                                           y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                           width=WIDTH_BUTTON,
-                                           height=HEIGHT_BUTTON,
-                                           state='normal')
-
-        # 设置保存按钮
-        self.btn_upload_calibrate = TkButton(master=self.__calibrate_frame,
-                                             bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                             activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                             activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                             borderwidth=0,
-                                             text="从RAM上传", font=FONT_BUTTON,
-                                             command=lambda: self.presenter.handler_on_upload_calibrate(),
-                                             x=210,
-                                             y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                             width=WIDTH_BUTTON,
-                                             height=HEIGHT_BUTTON,
-                                             state='normal')
-
-        # 设置保存按钮
-        self.btn_program_calibrate = TkButton(master=self.__calibrate_frame,
-                                              bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                              activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                              activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                              borderwidth=0,
-                                              text="刷写至ROM", font=FONT_BUTTON,
-                                              command=lambda: self.presenter.handler_on_program_calibrate(),
-                                              x=300,
-                                              y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
-                                              width=WIDTH_BUTTON,
-                                              height=HEIGHT_BUTTON,
-                                              state='normal')
-
-        # 设置表格风格
-        style = ttk.Style()
-        style.configure("Custom.Treeview",
-                        font=FONT_BUTTON,
-                        rowheight=super().get_dpi(18), )
-        # 设置表格
-        self.table_calibrate = TkTreeView(master=self.__calibrate_frame,
-                                          show="headings",
-                                          selectmode="extended",
-                                          style="Custom.Treeview",
-                                          x=0,
-                                          y=HEIGHT_ENTRY * 2 - WIDTH_SCROLLER_BAR,
-                                          width=self.WIDTH_SELECTION_FRAME - WIDTH_SCROLLER_BAR,
-                                          height=self.HEIGHT_SELECTION_FRAME - HEIGHT_ENTRY * 4 + WIDTH_SCROLLER_BAR - 30)
-        # self.table_calibrate.column("#0", width=420, minwidth=100)
-        # 设置滚动条
-        self.table_calibrate.create_scrollbar()
-        # 绑定数据项选择事件
-        # self.table_calibrate.bind("<<TreeviewSelect>>",
-        #                         lambda e: _pop_menu(e))
-        # 设置表头
-        self.table_calibrate["columns"] = ("Name", "Value", "Unit")
-        self.table_calibrate.column("Name", anchor='w', width=super().get_dpi(255))  # 表示列,不显示
-        self.table_calibrate.column("Value", anchor='w', width=super().get_dpi(95))
-        self.table_calibrate.column("Unit", anchor='w', width=super().get_dpi(29))
-        self.table_calibrate.heading("Name", anchor='w', text="Name")  # 显示表头
-        self.table_calibrate.heading("Value", anchor='w', text="Value")
-        self.table_calibrate.heading("Unit", anchor='w', text="Unit")
-
-        # 鼠标右键菜单
-        table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
-                             bg=COLOR_FRAME_BG, fg='black',
-                             activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
-        table_menu.add_command(label="删除",
-                               command=lambda: self.presenter.handler_on_delete_item(target='calibrate'),
-                               )
-        table_menu.add_command(label="属性",
-                               command=lambda: self.presenter.handler_on_show_property(
-                                   table=self.table_calibrate, target='calibrate'),
-                               )
-        self.table_calibrate.bind("<Button-3>",
-                                  lambda e:table_menu.post(e.x_root + 10, e.y_root))
-        self.table_calibrate.bind('<Double-1>',
-                                  lambda e: self.presenter.handler_on_table_calibrate_edit(e, self.table_calibrate))
+    # def set_calibrate_frame(self, model: MeasureModel):
+    #     """
+    #     设置标定数据项界面
+    #
+    #     :param model: 视图的数据模型
+    #     :type model: MeasureModel
+    #     """
+    #
+    #     # 设置区域容器
+    #     self.__calibrate_frame = TkFrame(master=self,
+    #                                      bg=COLOR_FRAME_BG, borderwidth=1,
+    #                                      x=self.WIDTH_SELECTION_FRAME * 2,
+    #                                      y=HEIGHT_WINDOW_MENU_BAR + 1,
+    #                                      width=self.WIDTH_SELECTION_FRAME,
+    #                                      height=self.HEIGHT_SELECTION_FRAME)
+    #
+    #     # 设置显示数目标签
+    #     self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
+    #                                           bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
+    #                                           text='', font=FONT_BUTTON,
+    #                                           relief="sunken", justify='left',
+    #                                           anchor='c', wraplength=WIDTH_LABEL,
+    #                                           x=self.WIDTH_SELECTION_FRAME - 10 - WIDTH_BUTTON,
+    #                                           y=0,
+    #                                           width=WIDTH_BUTTON,
+    #                                           height=HEIGHT_BUTTON)
+    #
+    #     label_title = TkLabel(master=self.__calibrate_frame,
+    #                           bg=COLOR_FRAME_BG, fg='black', borderwidth=0,
+    #                           text='标定', font=FONT_BUTTON,
+    #                           relief="sunken", justify='left',
+    #                           anchor='c', wraplength=WIDTH_LABEL,
+    #                           x=(self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON - WIDTH_SCROLLER_BAR) / 2,
+    #                           y=0,
+    #                           width=WIDTH_BUTTON,
+    #                           height=HEIGHT_BUTTON)
+    #
+    #     # 设置保存按钮
+    #     self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
+    #                                        bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+    #                                        activebackground=COLOR_BUTTON_ACTIVE_BG,
+    #                                        activeforeground=COLOR_BUTTON_ACTIVE_FG,
+    #                                        borderwidth=0,
+    #                                        text="保存至文件", font=FONT_BUTTON,
+    #                                        command=lambda: self.presenter.handler_on_save_calibrate(),
+    #                                        x=20,
+    #                                        y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+    #                                        width=WIDTH_BUTTON,
+    #                                        height=HEIGHT_BUTTON,
+    #                                        state='normal')
+    #
+    #     # 设置保存按钮
+    #     self.btn_upload_calibrate = TkButton(master=self.__calibrate_frame,
+    #                                          bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+    #                                          activebackground=COLOR_BUTTON_ACTIVE_BG,
+    #                                          activeforeground=COLOR_BUTTON_ACTIVE_FG,
+    #                                          borderwidth=0,
+    #                                          text="从RAM上传", font=FONT_BUTTON,
+    #                                          command=lambda: self.presenter.handler_on_upload_calibrate(),
+    #                                          x=210,
+    #                                          y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+    #                                          width=WIDTH_BUTTON,
+    #                                          height=HEIGHT_BUTTON,
+    #                                          state='normal')
+    #
+    #     # 设置保存按钮
+    #     self.btn_program_calibrate = TkButton(master=self.__calibrate_frame,
+    #                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+    #                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
+    #                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
+    #                                           borderwidth=0,
+    #                                           text="刷写至ROM", font=FONT_BUTTON,
+    #                                           command=lambda: self.presenter.handler_on_program_calibrate(),
+    #                                           x=300,
+    #                                           y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+    #                                           width=WIDTH_BUTTON,
+    #                                           height=HEIGHT_BUTTON,
+    #                                           state='normal')
+    #
+    #     # 设置表格风格
+    #     style = ttk.Style()
+    #     style.configure("Custom.Treeview",
+    #                     font=FONT_BUTTON,
+    #                     rowheight=super().get_dpi(18), )
+    #     # 设置表格
+    #     self.table_calibrate = TkTreeView(master=self.__calibrate_frame,
+    #                                       show="headings",
+    #                                       selectmode="extended",
+    #                                       style="Custom.Treeview",
+    #                                       x=0,
+    #                                       y=HEIGHT_ENTRY * 2 - WIDTH_SCROLLER_BAR,
+    #                                       width=self.WIDTH_SELECTION_FRAME - WIDTH_SCROLLER_BAR,
+    #                                       height=self.HEIGHT_SELECTION_FRAME - HEIGHT_ENTRY * 4 + WIDTH_SCROLLER_BAR - 30)
+    #     # self.table_calibrate.column("#0", width=420, minwidth=100)
+    #     # 设置滚动条
+    #     self.table_calibrate.create_scrollbar()
+    #     # 绑定数据项选择事件
+    #     # self.table_calibrate.bind("<<TreeviewSelect>>",
+    #     #                         lambda e: _pop_menu(e))
+    #     # 设置表头
+    #     self.table_calibrate["columns"] = ("Name", "Value", "Unit")
+    #     self.table_calibrate.column("Name", anchor='w', width=super().get_dpi(255))  # 表示列,不显示
+    #     self.table_calibrate.column("Value", anchor='w', width=super().get_dpi(95))
+    #     self.table_calibrate.column("Unit", anchor='w', width=super().get_dpi(29))
+    #     self.table_calibrate.heading("Name", anchor='w', text="Name")  # 显示表头
+    #     self.table_calibrate.heading("Value", anchor='w', text="Value")
+    #     self.table_calibrate.heading("Unit", anchor='w', text="Unit")
+    #
+    #     # 鼠标右键菜单
+    #     table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
+    #                          bg=COLOR_FRAME_BG, fg='black',
+    #                          activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
+    #     table_menu.add_command(label="删除",
+    #                            command=lambda: self.presenter.handler_on_delete_item(target='calibrate'),
+    #                            )
+    #     table_menu.add_command(label="属性",
+    #                            command=lambda: self.presenter.handler_on_show_property(
+    #                                table=self.table_calibrate, target='calibrate'),
+    #                            )
+    #     self.table_calibrate.bind("<Button-3>",
+    #                               lambda e:table_menu.post(e.x_root + 10, e.y_root))
+    #     self.table_calibrate.bind('<Double-1>',
+    #                               lambda e: self.presenter.handler_on_table_calibrate_edit(e, self.table_calibrate))

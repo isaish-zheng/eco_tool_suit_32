@@ -628,6 +628,8 @@ class ASAP2Measure(object):
 
     pid: str | None = None  # odt列表对应的pid
 
+    idx_in_table: int | None = None  # 在测量表格中的索引
+
 
 ##############################
 # Model API function declarations
@@ -671,97 +673,11 @@ class SelectCalibrateItem(object):
     is_selected_check: str = '□'
 
 
-@dataclass(slots=True)
-class MeasureItem(object):
-    """
-    测量表格中的数据项类
-
-    :param name: 测量对象名称
-    :type name: str
-    :param value: 物理值
-    :type value: str
-    :param rate: 速率
-    :type rate: str
-    :param unit: 单位
-    :type unit: str
-
-    :param idx_in_table_measure_items: 当前对象在测量表格列表中的索引
-    :type idx_in_table_measure_items: int
-    :param idx_in_a2l_measurements: 当前对象在A2L测量对象列表中索引
-    :type idx_in_a2l_measurements: int
-
-    :param data_type: 数据类型
-    :type data_type: str
-    :param conversion: 转换方法
-    :type conversion: str
-    :param conversion_type: 转换类型('RAT_FUNC':数值类型；'TAB_VERB':映射表，例如枚举)
-    :type conversion_type: str
-    :param compu_tab_ref: 转换映射名称
-    :type compu_tab_ref: str
-    :param compu_vtab: 转换映射表
-    :type compu_vtab: dict[int,str]
-    :param coeffs: 转换系数(A,B,C,D,E,F)
-    :type coeffs: tuple[float, float, float, float, float, float]
-    :param format: 显示格式(整数位数，小数位数)
-    :type format: tuple[int, int]
-
-    :param element_size: odt元素大小
-    :type element_size: int
-    :param element_addr: odt元素地址
-    :type element_addr: str
-
-    :param daq_number: daq列表序号
-    :type daq_number: int
-    :param odt_number: odt列表序号
-    :type odt_number: int
-    :param element_number: odt元素序号
-    :type element_number: int
-
-    :param pid: odt列表对应的pid
-    """
-    name: str = ''  # 名称
-    value: str = ''  # 物理值值
-    rate: str = ''  # 速率
-    unit: str = ''  # 单位
-
-    idx_in_table_measure_items: int = -1  # 当前对象在测量表格列表中的索引
-    idx_in_a2l_measurements: int = -1  # 当前对象在A2L测量对象列表中索引
-
-    data_type: str = ''  # 数据类型
-    conversion: str = ''  # 转换方法
-    conversion_type: str = ''  # 转换类型(转换方法中的conversion_type属性，'RAT_FUNC':普通数值类型；'TAB_VERB':映射表，例如枚举)
-    compu_tab_ref: str = ''  # 转换映射名称，若转换类型为TAB_VERB则存在
-    compu_vtab: dict[int, str] = None  # 转换映射表
-    coeffs: tuple[float, float, float, float, float, float] = ()  # 转换系数(A,B,C,D,E,F)，若转换类型为RAT_FUNC则存在
-    format: tuple[int, int] = ()  # 显示格式(整数位数，小数位数)
-
-    element_size: int = -1  # odt元素大小
-    element_addr: str = ''  # odt元素地址
-
-    daq_number: int = -1  # daq列表序号,1:20ms;2:100ms
-    odt_number: int = -1  # odt列表序号
-    element_number: int = -1  # odt元素序号
-
-    pid: str = ''  # odt列表对应的pid
-
-
 # @singleton
 class MeasureModel(object):
     """
     测量标定界面的数据模型
     """
-    daqs_cfg: dict[int, dict[str, int]]
-
-    ASAP2_TYPE_SIZE = {
-        'UBYTE': 1,
-        'SBYTE': 1,
-        'UWORD': 2,
-        'SWORD': 2,
-        'ULONG': 4,
-        'SLONG': 4,
-        'FLOAT32_IEEE': 4,
-        'FLOAT64_IEEE': 8  # 不支持，测量时此类型数据会被过滤掉
-    }
 
     def __init__(self):
         """构造函数"""
@@ -771,7 +687,7 @@ class MeasureModel(object):
         self.table_history_filepath: str = 'history.dat'  # 测量标定表格历史数据保存的文件路径
         self.refresh_operate_measure_time_ms = '100'  # 存储测量表格数值刷新时间，默认100ms
         self.history_epk = ''  # 存储历史数据epk
-        self.table_measure_items: list[MeasureItem] = []  # 存储测量表格当前显示的数据项内容
+        self.table_measure_dict: dict[str, ASAP2Measure] = {}  # 存储测量表格当前显示的数据项内容
         self.table_calibrate_dict: dict[str, ASAP2Calibrate] = {}
 
         self.obj_measure: eco_pccp.Measure | None= None  # 存储测量对象，用于与ecu通信
@@ -790,7 +706,7 @@ class MeasureModel(object):
         self.a2l_memory_epk_data: MemorySegment | None = None  # 存储A2L文件解析后的epk数据内存段对象
         self.a2l_memory_ram_cal: MemorySegment | None = None  # 存储A2L文件解析后的ram标定内存段对象
         self.a2l_memory_rom_cal: MemorySegment | None = None  # 存储A2L文件解析后的rom标定内存段对象
-        self.a2l_measurements: list[Measurement] = []  # 存储A2L文件解析后的测量对象列表
+        self.a2l_measurement_dict: dict[str, Measurement] = {}  # 存储A2L文件解析后的测量对象列表
         self.a2l_calibration_dict: dict[str, Characteristic] = {}  # 存储A2L文件解析后的标定(可调整)对象字典
 
         self.a2l_record_layout_dict: dict[str, RecordLayout] = {}  # 存储A2L文件解析后的标定变量内存布局
@@ -817,7 +733,7 @@ class MeasureModel(object):
         #          1: [item8, item9, item10, item11]
         #         }
         #     }
-        self.daqs: dict[int, dict[int, list[MeasureItem]]] = {}
+        self.daqs: dict[int, dict[int, list[ASAP2Measure]]] = {}
 
         # 存储线程间通信的队列,测量时的待显示数据
         self.q = Queue()

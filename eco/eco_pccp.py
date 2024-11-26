@@ -21,7 +21,7 @@ from typing import Any, Union
 
 from crccheck.crc import Crc16Modbus, Crc16Ibm3740
 
-from app.measure.model import MeasureItem
+from app.measure.model import ASAP2Measure
 from srecord import Srecord
 from utils import pad_hex, get_c_char
 
@@ -1904,12 +1904,12 @@ class Measure(object):
             self.print_detail(f'发生异常 {e}', 'error')
             self.print_detail(f"{traceback.format_exc()}", 'error')
 
-    def start_measure(self, daqs: dict[int, dict[int, list[MeasureItem]]]) -> None:
+    def start_measure(self, daqs: dict[int, dict[int, list[ASAP2Measure]]]) -> None:
         """
         启动测量流程
 
         :param daqs: daq列表
-        :type daqs: dict[int, dict[int, list[MeasureItem]]]
+        :type daqs: dict[int, dict[int, list[ASAP2Measure]]]
         """
         try:
             # 若未连接，则返回
