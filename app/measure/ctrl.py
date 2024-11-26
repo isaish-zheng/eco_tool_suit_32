@@ -38,7 +38,7 @@ from .model import MeasureModel, \
     ASAP2FncValues, ASAP2AxisPtsXYZ45, ASAP2CompuVtab, ASAP2AxisPts, \
     ASAP2EnumCalibrateType, ASAP2EnumDataType, ASAP2EnumConversionType, ASAP2EnumByteOrder, \
     ASAP2EnumIndexMode, ASAP2EnumAddrType, ASAP2EnumIndexOrder, ASAP2EnumAxisType
-from .view import tk, ttk, MeasureView, CalibrateView, TkTreeView, \
+from .view import tk, ttk, MsrCalView, MeasureView, CalibrateView, TkTreeView, \
     SubPropertyView, SubCalibrateCurveView, SubCalibrateValueView, SubCalibrateMapView
 from ..download.model import DownloadModel
 
@@ -55,7 +55,7 @@ class MeasureCtrl(object):
     :param model: 视图的数据模型
     :type model: MeasureModel
     :param view: 视图
-    :type view: MeasureView
+    :type view: MsrCalView
     :param extra_model: 其它界面的数据模型，用于当前窗口使用其它窗口的数据
     :type extra_model: DownloadModel
     :param text_log: 日志输出函数
@@ -66,7 +66,7 @@ class MeasureCtrl(object):
 
     def __init__(self,
                  model: MeasureModel,
-                 view: MeasureView,
+                 view: MsrCalView,
                  extra_model: DownloadModel,
                  text_log: callable,
                  cfg_path: tuple[str, str]) -> None:
@@ -91,6 +91,7 @@ class MeasureCtrl(object):
         self.__pool_recv = ThreadPoolExecutor(max_workers=1, thread_name_prefix='task_recv_')
         self.__after_id = None  # 窗口定时器id
 
+        self.__msr_view = None  # 测量界面
         self.__cal_view = None  # 标定界面
         self.__curve_view = None  # Curve标定界面
         self.__map_view = None  # Map标定界面
@@ -343,7 +344,7 @@ class MeasureCtrl(object):
 
     def handler_on_closing(self) -> None:
         """
-        关闭topui窗口时触发的功能
+        关闭测量标定界面时触发的功能
 
         """
 
@@ -361,7 +362,6 @@ class MeasureCtrl(object):
                 self.save_config()  # 保存配置
                 self.__pool_recv.shutdown(wait=False)  # 关闭线程池
                 self.__pool.shutdown(wait=False)  # 关闭线程池
-                self.view.destroy()  # 关闭窗口
             except Exception as e:
                 self.text_log(f'发生异常 {e}', 'error')
                 self.text_log(f"{traceback.format_exc()}", 'error')
@@ -411,19 +411,19 @@ class MeasureCtrl(object):
             for iid in selected_iids:
                 name = table.item(iid, "values")[column_names.index("Name")]
                 if target == 'select_measure' and selected_iids:
-                    SubPropertyView(master=self.view,
+                    SubPropertyView(master=self.view.master,
                                     obj=self.model.a2l_measurement_dict[name],
                                     target='measure')
                 if target == 'measure' and selected_iids:
-                    SubPropertyView(master=self.view,
+                    SubPropertyView(master=self.__msr_view,
                                     obj=self.model.table_measure_dict[name],
                                     target='measure')
                 if target == 'select_calibrate' and selected_iids:
-                    SubPropertyView(master=self.view,
+                    SubPropertyView(master=self.view.master,
                                     obj=self.model.a2l_calibration_dict[name],
                                     target='calibrate')
                 if target == 'calibrate' and selected_iids:
-                    SubPropertyView(master=self.view,
+                    SubPropertyView(master=self.__cal_view,
                                     obj=self.model.table_calibrate_dict[name],
                                     target='calibrate')
 
@@ -579,6 +579,9 @@ class MeasureCtrl(object):
                         item.value = '双击进行测量'
                     else:
                         pass
+                # 显示测量界面
+                if not self.__msr_view or not self.__msr_view.table_measure:
+                    self.__msr_view = MeasureView(master=self.view.master, presenter=self)
                 # 刷新
                 self.__flush_table_operate(target='measure')
                 self.__flush_label_operate_number(target='measure')
@@ -604,8 +607,10 @@ class MeasureCtrl(object):
                     else:
                         item.data = None
                         item.value = '双击进行标定'
+                # 显示标定界面
+                if not self.__cal_view or not self.__cal_view.table_calibrate:
+                    self.__cal_view = CalibrateView(master=self.view.master, presenter=self)
                 # 刷新
-                self.__cal_view = CalibrateView(self.view, self)
                 self.__flush_table_operate(target='calibrate')
                 self.__flush_label_operate_number(target='calibrate')
                 self.handler_on_cancel_select(target='calibrate')
@@ -674,16 +679,17 @@ class MeasureCtrl(object):
             # 若已启动测量，则不允许删除
             if hasattr(self.model.obj_measure, 'has_measured') and self.model.obj_measure.has_measured:
                 return
-
+            if not self.__msr_view or not self.__msr_view.table_measure:
+                return
             # 获取选中数据项的id元祖
-            selected_item_iids = self.view.table_measure.selection()
+            selected_item_iids = self.__msr_view.table_measure.selection()
             # 获取数据表列名组成的元组
-            column_names = tuple(self.view.table_measure["columns"])
+            column_names = tuple(self.__msr_view.table_measure["columns"])
 
             # 从测量数据项列表中删除选择的数据项
             if selected_item_iids:
                 for iid in selected_item_iids:
-                    name = self.view.table_measure.item(iid, "values")[column_names.index("Name")]
+                    name = self.__msr_view.table_measure.item(iid, "values")[column_names.index("Name")]
                     self.model.table_measure_dict.pop(name)
             # 刷新
             self.handler_on_cancel_select(target='measure')
@@ -972,9 +978,9 @@ class MeasureCtrl(object):
             if selected_col != 'Value':
                 return
             # 若未连接设备则退出
-            if not (self.model.obj_measure and self.model.obj_measure.has_connected):
-                self.view.show_warning('请先连接设备')
-                return
+            # if not (self.model.obj_measure and self.model.obj_measure.has_connected):
+            #     self.view.show_warning('请先连接设备')
+            #     return
             # 根据表格数据项iid获取此填充此表格数据项列表的相应索引及其数据
             cal_item = self.model.table_calibrate_dict[selected_name]
             # 根据标定类型进行相应处理
@@ -1036,7 +1042,7 @@ class MeasureCtrl(object):
                 self.model.table_calibrate_axis_dict = axis_calibrate_dict
                 self.model.table_calibrate_value_dict = value_calibrate_dict
                 # 显示Curve标定界面
-                self.__curve_view = SubCalibrateCurveView(master=self.view,
+                self.__curve_view = SubCalibrateCurveView(master=self.__cal_view,
                                                           axis_calibrate_dict=self.model.table_calibrate_axis_dict ,
                                                           value_calibrate_dict=self.model.table_calibrate_value_dict,
                                                           presenter=self)
@@ -1106,7 +1112,7 @@ class MeasureCtrl(object):
                 self.model.table_calibrate_axis2_dict = axis2_calibrate_dict
                 self.model.table_calibrate_value_dict = value_calibrate_dict
                 # 显示Map标定界面
-                self.__map_view = SubCalibrateMapView(master=self.view,
+                self.__map_view = SubCalibrateMapView(master=self.__cal_view,
                                                       axis_calibrate_dict=self.model.table_calibrate_axis_dict,
                                                       axis2_calibrate_dict=self.model.table_calibrate_axis2_dict,
                                                       value_calibrate_dict=self.model.table_calibrate_value_dict,
@@ -1595,16 +1601,17 @@ class MeasureCtrl(object):
         :type target: str
         """
         if target == 'all' or target == 'measure':
-            # 清空所有数据项
-            self.view.table_measure.delete(*self.view.table_measure.get_children())
-            # 刷新显示测量表
-            for k, v in self.model.table_measure_dict.items():
-                values = (k,
-                          v.value,
-                          v.rate,
-                          v.conversion.unit)
-                self.view.table_measure.insert(
-                    parent="", index="end", text="", values=values)
+            if self.__msr_view and self.__msr_view.table_measure:
+                # 清空所有数据项
+                self.__msr_view.table_measure.delete(*self.__msr_view.table_measure.get_children())
+                # 刷新显示测量表
+                for k, v in self.model.table_measure_dict.items():
+                    values = (k,
+                              v.value,
+                              v.rate,
+                              v.conversion.unit)
+                    self.__msr_view.table_measure.insert(
+                        parent="", index="end", text="", values=values)
         if target == 'all' or target == 'calibrate':
             if self.__cal_view and self.__cal_view.table_calibrate:
                 # 清空所有数据项
@@ -1671,8 +1678,10 @@ class MeasureCtrl(object):
         :type target: str
         """
         if target == 'all' or target == 'measure':
+            if not self.__msr_view or not self.__msr_view.table_measure:
+                return
             measure_num = len(self.model.table_measure_dict)
-            self.view.label_measure_number.config(text=measure_num)
+            self.__msr_view.label_measure_number.config(text=measure_num)
         if target == 'all' or target == 'calibrate':
             if not self.__cal_view or not self.__cal_view.table_calibrate:
                 return
@@ -2091,7 +2100,7 @@ class MeasureCtrl(object):
         # 建立局部变量，加快访问速度
         _q = self.model.q  # 显示值队列
         _obj_measure = self.model.obj_measure  # 是否已测量
-        _table_measure = self.view.table_measure  # 测量表格
+        _table_measure = self.__msr_view.table_measure  # 测量表格
         _table_measure_dict = self.model.table_measure_dict # 测量表格数据项
         # 获取测量表格中所有的item_id列表
         _table_measure_iids = _table_measure.get_children()

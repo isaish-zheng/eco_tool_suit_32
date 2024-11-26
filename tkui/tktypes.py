@@ -32,7 +32,7 @@ FONT_BUTTON = ('微软雅黑', 9)
 FONT_LABEL = ('微软雅黑', 8)
 
 WIDTH_ROOT_WINDOW = 800
-HEIGHT_ROOT_WINDOW = 480
+HEIGHT_ROOT_WINDOW = 600
 
 HEIGHT_WINDOW_MENU_BAR = 20
 
@@ -330,15 +330,11 @@ class TkText(tk.Text, GetDpiMixIn):
                                                     ),
                                    )
         text_info_menu.add_command(label="保存",
-                                   command=lambda: (self.config(state='normal'),
-                                                    self.__save_log(),
-                                                    self.config(state='disabled')
-                                                    ),
-                                   )
+                                   command=lambda: self.save_log())
 
         self.bind("<Button-3>", lambda e: text_info_menu.post(e.x_root + 10, e.y_root))
 
-    def __save_log(self) -> str:
+    def save_log(self) -> str:
         """
         保存flash日志
 
@@ -346,14 +342,17 @@ class TkText(tk.Text, GetDpiMixIn):
         :rtype: str
         """
         try:
+            self.config(state='normal')
             filepath = r'.\logging.log'
             with open(filepath, "w", encoding='utf-8') as f:
                 f.write(self.get(1.0, tk.END))
-            msg = f'保存成功 {os.path.abspath(filepath)}'
+            msg = f'操作记录保存成功\n {os.path.abspath(filepath)}'
+            self.config(state='disabled')
             messagebox.showinfo("提示", msg)
             return msg
         except Exception as e:
-            msg = f'保存失败 {os.path.abspath(filepath)}'
+            self.config(state='disabled')
+            msg = f'操作记录保存失败 {os.path.abspath(filepath)}'
             raise Exception(msg)
 
     def creat_scrollbar(self) -> None:

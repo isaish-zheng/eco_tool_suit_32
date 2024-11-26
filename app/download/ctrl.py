@@ -28,7 +28,7 @@ from srecord import Srecord
 
 from .model import DownloadModel
 from .view import DownloadView
-from ..measure.ctrl import MeasureModel, MeasureView, MeasureCtrl
+from ..measure.ctrl import MeasureModel, MsrCalView, MeasureCtrl
 
 
 ##############################
@@ -62,6 +62,8 @@ class DownloadCtrl(object):
         self.__cfg_path = cfg_path
         self.__cfg_download_path = cfg_path[0]
         # self.__cfg_a2l_path = cfg_path[1]
+
+        self.measure_ctrl = None # 测量标定界面的控制器
 
         # 初始化配置
         self.ini_config()
@@ -242,6 +244,8 @@ class DownloadCtrl(object):
 
         """
         try:
+            if self.measure_ctrl:
+                self.measure_ctrl.handler_on_closing()
             # print("当前线程数量为", threading.active_count())
             # print("所有线程的具体信息", threading.enumerate())
             # print("当前线程具体信息", threading.current_thread())
@@ -255,6 +259,7 @@ class DownloadCtrl(object):
                     self.view.show_warning(f'请先关闭测量窗口 !')
                     return
             self.save_config(False)
+            self.view.text_info.save_log()
             self.view.quit()
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
@@ -393,26 +398,24 @@ class DownloadCtrl(object):
 
         """
         try:
+
             # 创建view
-            measure_view = MeasureView(master=self.view, )
+            measure_view = MsrCalView(master=self.view)
             # 创建model
             measure_model = MeasureModel()
             # 创建controller
-            measure_ctrl = MeasureCtrl(model=measure_model,
+            self.measure_ctrl = MeasureCtrl(model=measure_model,
                                        view=measure_view,
                                        extra_model=self.model,
                                        text_log=self.text_log,
                                        cfg_path=self.__cfg_path)
 
             # 显示子窗口内容
-            measure_view.set_root_menu()
             measure_view.set_select_measure_frame(model=measure_model)
-            measure_view.set_measure_frame(model=measure_model)
             measure_view.set_select_calibrate_frame(model=measure_model)
-            # measure_view.set_calibrate_frame(model=measure_model)
 
             # 启动时显示上一次打开的文件信息和数据
-            measure_ctrl.deal_file()
+            self.measure_ctrl.deal_file()
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')

@@ -178,7 +178,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                 borderwidth=5,
                                 font=FONT_LABEL,
                                 relief='flat', wrap='none', state='disabled',
-                                x=10, y=60, width=self.WIDTH_OPERATION_FRAME - 38, height=HEIGHT_TEXT_INFO)
+                                x=10, y=60, width=self.WIDTH_OPERATION_FRAME - 38, height=HEIGHT_ROOT_WINDOW - 90)
         self.text_info.creat_scrollbar()
 
     def set_setting_frame(self, model: DownloadModel):
@@ -290,6 +290,26 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                     textvariable=model.entry_function_id,
                                     relief="sunken", justify='left',
                                     x=20, y=360, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
+
+    def set_msr_cal_frame(self, width:int = 500) -> TkFrame:
+        """
+        设置测量操作界面
+
+        :param width: 界面宽度
+        :type width: int
+        :return: 容器
+        :rtype: TkFrame
+        """
+        # 右侧扩展窗口
+        self.geometry(f"{self.get_dpi(self.WIDTH_OPERATION_FRAME + self.WIDTH_SETTING_FRAME + width)}"
+                      f"x{self.get_dpi(HEIGHT_ROOT_WINDOW)}")
+        # 添加一个Frame
+        return TkFrame(master=self,
+                       bg=COLOR_FRAME_BG, borderwidth=0,
+                       x=self.WIDTH_OPERATION_FRAME + self.WIDTH_SETTING_FRAME,
+                       y=0,
+                       width=width,
+                       height=HEIGHT_ROOT_WINDOW)
 
     def __show_about(self):
         """
