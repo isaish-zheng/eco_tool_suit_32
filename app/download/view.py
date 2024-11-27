@@ -9,11 +9,19 @@
 # Module imports
 ##############################
 import base64  # Base64编码解码模块
-from typing import AnyStr, Any
+import ctypes  # 操作系统接口模块
+import os
+from typing import Any
 
 from tkui import icon
-from tkui.tktypes import *
-
+from tkui.tktypes import tk, GetDpiMixIn, messagebox, \
+    TkFrame, TkLabel, TkButton, TkEntry, TkCombobox ,TkText, \
+    FONT_BUTTON,  FONT_LABEL, \
+    COLOR_FRAME_BG, COLOR_LABEL_BG, COLOR_LABEL_FG, \
+    COLOR_BUTTON_BG, COLOR_BUTTON_FG, COLOR_BUTTON_ACTIVE_BG, COLOR_BUTTON_ACTIVE_FG, \
+    WIDTH_LABEL, WIDTH_BUTTON, WIDTH_ROOT_WINDOW, WIDTH_COMBOBOX, WIDTH_ENTRY, \
+    HEIGHT_BUTTON, HEIGHT_ENTRY, HEIGHT_ROOT_WINDOW, HEIGHT_WINDOW_MENU_BAR, \
+    HEIGHT_LABEL, HEIGHT_COMBOBOX
 from .model import DownloadModel
 
 
@@ -34,6 +42,11 @@ class DownloadView(tk.Tk, GetDpiMixIn):
         # 操作系统使用程序自身的dpi适配
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
         super().__init__()
+
+        self.presenter = None # 视图的控制器
+        self.text_info = None # 信息显示
+        self.btn_mc = None # 测量标定按钮
+
         # 显示根窗口
         self.set_root()
 
@@ -63,7 +76,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
 
         """
         # root = tk.Tk()
-        self.title("Eco Download")
+        self.title("Eco Tool Suit")
         # 窗口尺寸和位置
         x_pos = int((self.winfo_screenwidth() -
                      super().get_dpi(WIDTH_ROOT_WINDOW)) / 2)
@@ -109,9 +122,6 @@ class DownloadView(tk.Tk, GetDpiMixIn):
         file_settings_menu.add_checkbutton(label="显示消息详情",
                                            variable=model.check_uds_is_show_msg_detail,
                                            command=lambda: self.presenter.handler_on_show_uds_msg_detail())
-
-        # 文件菜单绑定测量按钮
-        file_menu.add_command(label="CCP测量与标定", command=lambda: self.presenter.handler_on_open_measure_ui())
         # 文件菜单绑定退出按钮
         file_menu.add_command(label="复位设备", command=lambda: self.presenter.try_reset_pcan_device())
         # 文件菜单绑定退出按钮
@@ -139,17 +149,17 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                         bg=COLOR_FRAME_BG, borderwidth=0,
                         x=0, y=0, width=self.WIDTH_OPERATION_FRAME - 2, height=HEIGHT_ROOT_WINDOW)
         # 按钮_打开文件
-        btn_open_file = TkButton(master=frame,
-                                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                 activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                 borderwidth=0,
-                                 text="打开", font=FONT_BUTTON,
-                                 command=lambda: (self.presenter.handler_on_open_download_file(),
-                                                  btn_download.config(state=model.opened_pgm_filepath and
-                                                                            model.opened_seed2key_filepath and
-                                                                            'normal' or 'disabled')
-                                                  ),
-                                 x=10, y=15, width=WIDTH_BUTTON, height=HEIGHT_BUTTON)
+        TkButton(master=frame,
+                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                 activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                 borderwidth=0,
+                 text="打开", font=FONT_BUTTON,
+                 command=lambda: (self.presenter.handler_on_open_download_file(),
+                                  btn_download.config(state=model.opened_pgm_filepath and
+                                                            model.opened_seed2key_filepath and
+                                                            'normal' or 'disabled')
+                                  ),
+                 x=10, y=15, width=WIDTH_BUTTON, height=HEIGHT_BUTTON)
         # 按钮_下载
         btn_download = TkButton(master=frame,
                                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
@@ -161,18 +171,18 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                 state='disabled')
 
         # 按钮_秘钥
-        btn_seed2key = TkButton(master=frame,
-                                bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                borderwidth=0,
-                                text="秘钥", font=FONT_BUTTON,
-                                command=lambda: (self.presenter.handler_on_open_seed2key_file(),
-                                                 btn_download.config(state=model.opened_pgm_filepath and
-                                                                           model.opened_seed2key_filepath and
-                                                                           'normal' or 'disabled')
-                                                 ),
-                                x=self.WIDTH_OPERATION_FRAME - 88, y=15,
-                                width=WIDTH_BUTTON, height=HEIGHT_BUTTON)
+        TkButton(master=frame,
+                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                 activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                 borderwidth=0,
+                 text="秘钥", font=FONT_BUTTON,
+                 command=lambda: (self.presenter.handler_on_open_seed2key_file(),
+                                  btn_download.config(state=model.opened_pgm_filepath and
+                                                            model.opened_seed2key_filepath and
+                                                            'normal' or 'disabled')
+                                  ),
+                 x=self.WIDTH_OPERATION_FRAME - 88, y=15,
+                 width=WIDTH_BUTTON, height=HEIGHT_BUTTON)
         self.text_info = TkText(master=frame,
                                 bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG,
                                 borderwidth=5,
@@ -188,92 +198,92 @@ class DownloadView(tk.Tk, GetDpiMixIn):
         :param model: 下载视图的数据模型
         :type model: DownloadModel
         """
-        # 添加一个Frame
+        # 参数设置Frame
         frame = TkFrame(master=self,
                         bg=COLOR_FRAME_BG, borderwidth=0,
-                        x=self.WIDTH_OPERATION_FRAME, y=0,
-                        width=self.WIDTH_SETTING_FRAME, height=HEIGHT_ROOT_WINDOW)
+                        x=self.WIDTH_OPERATION_FRAME, y=60,
+                        width=self.WIDTH_SETTING_FRAME, height=HEIGHT_ROOT_WINDOW-60)
         # 刷写协议
-        lbl_protocol = TkLabel(master=frame,
-                               bg=COLOR_FRAME_BG, fg='black',
-                               borderwidth=0,
-                               relief="sunken", justify='left', anchor='w',
-                               text="刷写协议：", font=FONT_BUTTON,
-                               x=10, y=10, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        combobox_protocol = TkCombobox(master=frame,
-                                       background=COLOR_FRAME_BG, foreground='black',
-                                       values=model.PROTOCAOL, font=FONT_BUTTON,
-                                       textvariable=model.combobox_mode_protocol,
-                                       command=lambda: (self.presenter.handler_on_select_mode_protocol(),
-                                                        lbl_function_id.config(
-                                                            text=model.mode_protocol == model.PROTOCAOL[
-                                                                0] and "功能地址：" or "ecu站地址：")),
-                                       x=20, y=30, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX,
-                                       state='normal')
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="刷写协议：", font=FONT_BUTTON,
+                x=10, y=10, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkCombobox(master=frame,
+                   background=COLOR_FRAME_BG, foreground='black',
+                   values=model.PROTOCAOL, font=FONT_BUTTON,
+                   textvariable=model.combobox_mode_protocol,
+                   command=lambda: (self.presenter.handler_on_select_mode_protocol(),
+                                    lbl_function_id.config(
+                                        text=model.mode_protocol == model.PROTOCAOL[
+                                            0] and "功能地址：" or "ecu站地址：")),
+                   x=20, y=30, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX,
+                   state='normal')
         # 设备类型
-        lbl_device = TkLabel(master=frame,
-                             bg=COLOR_FRAME_BG, fg='black',
-                             borderwidth=0,
-                             relief="sunken", justify='left', anchor='w',
-                             text="设备类型：", font=FONT_BUTTON,
-                             x=10, y=65, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        combobox_device = TkCombobox(master=frame,
-                                     background=COLOR_FRAME_BG, foreground='black',
-                                     values=model.DEVICES, font=FONT_BUTTON,
-                                     textvariable=model.combobox_device_type,
-                                     x=20, y=85, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="设备类型：", font=FONT_BUTTON,
+                x=10, y=65, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkCombobox(master=frame,
+                   background=COLOR_FRAME_BG, foreground='black',
+                   values=model.DEVICES, font=FONT_BUTTON,
+                   textvariable=model.combobox_device_type,
+                   x=20, y=85, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
         # 设备通道
-        lbl_channel = TkLabel(master=frame,
-                              bg=COLOR_FRAME_BG, fg='black',
-                              borderwidth=0,
-                              relief="sunken", justify='left', anchor='w',
-                              text="设备通道：", font=FONT_BUTTON,
-                              x=10, y=120, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        combobox_channel = TkCombobox(master=frame,
-                                      background=COLOR_FRAME_BG, foreground='black',
-                                      values=model.CHANNELS, font=FONT_BUTTON,
-                                      textvariable=model.combobox_device_channel,
-                                      x=20, y=140, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="设备通道：", font=FONT_BUTTON,
+                x=10, y=120, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkCombobox(master=frame,
+                   background=COLOR_FRAME_BG, foreground='black',
+                   values=model.CHANNELS, font=FONT_BUTTON,
+                   textvariable=model.combobox_device_channel,
+                   x=20, y=140, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
         # 波特率
-        lbl_baudrate = TkLabel(master=frame,
-                               bg=COLOR_FRAME_BG, fg='black',
-                               borderwidth=0,
-                               relief="sunken", justify='left', anchor='w',
-                               text="波特率：", font=FONT_BUTTON,
-                               x=10, y=175, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        combobox_baudrate = TkCombobox(master=frame,
-                                       background=COLOR_FRAME_BG, foreground='black',
-                                       values=model.BAUDRATES, font=FONT_BUTTON,
-                                       textvariable=model.combobox_baudrate,
-                                       x=20, y=195, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="波特率：", font=FONT_BUTTON,
+                x=10, y=175, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkCombobox(master=frame,
+                   background=COLOR_FRAME_BG, foreground='black',
+                   values=model.BAUDRATES, font=FONT_BUTTON,
+                   textvariable=model.combobox_baudrate,
+                   x=20, y=195, width=WIDTH_COMBOBOX, height=HEIGHT_COMBOBOX)
         # 请求地址
-        lbl_request_id = TkLabel(master=frame,
-                                 bg=COLOR_FRAME_BG, fg='black',
-                                 borderwidth=0,
-                                 relief="sunken", justify='left', anchor='w',
-                                 text="请求地址：", font=FONT_BUTTON,
-                                 x=10, y=230, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        entry_request_id = TkEntry(master=frame,
-                                   bg=COLOR_FRAME_BG, fg='black',
-                                   borderwidth=1,
-                                   font=FONT_BUTTON,
-                                   textvariable=model.entry_request_id,
-                                   relief="sunken", justify='left',
-                                   x=20, y=250, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="请求地址：", font=FONT_BUTTON,
+                x=10, y=230, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkEntry(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=1,
+                font=FONT_BUTTON,
+                textvariable=model.entry_request_id,
+                relief="sunken", justify='left',
+                x=20, y=250, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
         # 响应地址
-        lbl_response_id = TkLabel(master=frame,
-                                  bg=COLOR_FRAME_BG, fg='black',
-                                  borderwidth=0,
-                                  relief="sunken", justify='left', anchor='w',
-                                  text="响应地址：", font=FONT_BUTTON,
-                                  x=10, y=285, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        entry_response_id = TkEntry(master=frame,
-                                    bg=COLOR_FRAME_BG, fg='black',
-                                    borderwidth=1,
-                                    font=FONT_BUTTON,
-                                    textvariable=model.entry_response_id,
-                                    relief="sunken", justify='left',
-                                    x=20, y=305, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
+        TkLabel(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=0,
+                relief="sunken", justify='left', anchor='w',
+                text="响应地址：", font=FONT_BUTTON,
+                x=10, y=285, width=WIDTH_LABEL, height=HEIGHT_LABEL)
+        TkEntry(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=1,
+                font=FONT_BUTTON,
+                textvariable=model.entry_response_id,
+                relief="sunken", justify='left',
+                x=20, y=305, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
         # 功能地址
         lbl_function_id = TkLabel(master=frame,
                                   bg=COLOR_FRAME_BG, fg='black',
@@ -283,13 +293,30 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                                       0]) else "ecu站地址："),
                                   font=FONT_BUTTON,
                                   x=10, y=340, width=WIDTH_LABEL, height=HEIGHT_LABEL)
-        entry_function_id = TkEntry(master=frame,
-                                    bg=COLOR_FRAME_BG, fg='black',
-                                    borderwidth=1,
-                                    font=FONT_BUTTON,
-                                    textvariable=model.entry_function_id,
-                                    relief="sunken", justify='left',
-                                    x=20, y=360, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
+        TkEntry(master=frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=1,
+                font=FONT_BUTTON,
+                textvariable=model.entry_function_id,
+                relief="sunken", justify='left',
+                x=20, y=360, width=WIDTH_ENTRY, height=HEIGHT_ENTRY)
+
+        # 标定测量按钮Frame
+        frame2 = TkFrame(master=self,
+                        bg=COLOR_FRAME_BG, borderwidth=0,
+                        x=self.WIDTH_OPERATION_FRAME, y=0,
+                        width=self.WIDTH_SETTING_FRAME, height=58)
+        # 按钮_打开和关闭标定测量视图
+        self.btn_mc = TkButton(master=frame2,
+                               bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                               activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                               borderwidth=0,
+                               text="测量与标定>>", font=FONT_BUTTON,
+                               command=lambda: (self.presenter.handler_on_open_mc_ui() if
+                                                self.btn_mc["text"]=="测量与标定>>" else
+                                                self.presenter.handler_on_close_mc_ui()),
+                               x=(self.WIDTH_SETTING_FRAME - WIDTH_BUTTON) / 2, y=(58 - HEIGHT_BUTTON) / 2,
+                               width=WIDTH_BUTTON, height=HEIGHT_BUTTON)
 
     def set_msr_cal_frame(self, width:int = 500) -> TkFrame:
         """
@@ -311,13 +338,22 @@ class DownloadView(tk.Tk, GetDpiMixIn):
                        width=width,
                        height=HEIGHT_ROOT_WINDOW)
 
+    def clear_msr_cal_frame(self) -> None:
+        """
+        清除测量操作界面
+
+        """
+        # 回收右侧扩展窗口
+        self.geometry(f"{self.get_dpi(self.WIDTH_OPERATION_FRAME + self.WIDTH_SETTING_FRAME)}"
+                      f"x{self.get_dpi(HEIGHT_ROOT_WINDOW)}")
+
     def __show_about(self):
         """
         显示关于弹窗
 
         """
         msg = ('产品信息: \n'
-               '    Eco Tool Suit V2.2.1\n'
+               '    Eco Tool Suit V2024.3.0\n'
                '    Author: ZYD\n\n'
                '本产品包含: \n'
                '    Eco Download\n'

@@ -63,7 +63,8 @@ class DownloadCtrl(object):
         self.__cfg_download_path = cfg_path[0]
         # self.__cfg_a2l_path = cfg_path[1]
 
-        self.measure_ctrl = None # 测量标定界面的控制器
+        self.mc_ctrl = None # 测量标定界面的控制器
+        self.__mc_view = None # 测量标定界面的视图
 
         # 初始化配置
         self.ini_config()
@@ -244,8 +245,6 @@ class DownloadCtrl(object):
 
         """
         try:
-            if self.measure_ctrl:
-                self.measure_ctrl.handler_on_closing()
             # print("当前线程数量为", threading.active_count())
             # print("所有线程的具体信息", threading.enumerate())
             # print("当前线程具体信息", threading.current_thread())
@@ -255,11 +254,12 @@ class DownloadCtrl(object):
                 if 'task_download' in t.name:
                     self.view.show_warning(f'{t.name}任务执行中. . .\n请在任务结束后关闭 !')
                     return
-                if 'task_measure' in t.name:
-                    self.view.show_warning(f'请先关闭测量窗口 !')
+                if 'task_mc' in t.name:
+                    self.view.show_warning(f'请先关闭测量标定界面 !')
                     return
+            if self.mc_ctrl:
+                self.mc_ctrl.save_config()
             self.save_config(False)
-            self.view.text_info.save_log()
             self.view.quit()
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
@@ -392,30 +392,42 @@ class DownloadCtrl(object):
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')
 
-    def handler_on_open_measure_ui(self) -> None:
+    def handler_on_open_mc_ui(self) -> None:
         """
-        点击窗口中文件菜单下的CCP测量时执行，将打开测量界面
+        打开测量标定视图
 
         """
         try:
-
             # 创建view
-            measure_view = MsrCalView(master=self.view)
+            self.__mc_view = MsrCalView(master=self.view)
             # 创建model
             measure_model = MeasureModel()
             # 创建controller
-            self.measure_ctrl = MeasureCtrl(model=measure_model,
-                                       view=measure_view,
+            self.mc_ctrl = MeasureCtrl(model=measure_model,
+                                       view=self.__mc_view,
                                        extra_model=self.model,
                                        text_log=self.text_log,
                                        cfg_path=self.__cfg_path)
-
             # 显示子窗口内容
-            measure_view.set_select_measure_frame(model=measure_model)
-            measure_view.set_select_calibrate_frame(model=measure_model)
-
+            self.__mc_view.set_select_measure_frame(model=measure_model)
+            self.__mc_view.set_select_calibrate_frame(model=measure_model)
             # 启动时显示上一次打开的文件信息和数据
-            self.measure_ctrl.deal_file()
+            self.mc_ctrl.deal_file()
+            # 更新按钮名称
+            self.view.btn_mc.config(text="<<测量与标定")
+        except Exception as e:
+            self.text_log(f'发生异常 {e}', 'error')
+            self.text_log(f"{traceback.format_exc()}", 'error')
+
+    def handler_on_close_mc_ui(self) -> None:
+        """
+        关闭测量标定视图
+
+        """
+        try:
+            self.mc_ctrl.handler_on_closing()
+            self.view.clear_msr_cal_frame()
+            self.view.btn_mc.config(text="测量与标定>>")
         except Exception as e:
             self.text_log(f'发生异常 {e}', 'error')
             self.text_log(f"{traceback.format_exc()}", 'error')

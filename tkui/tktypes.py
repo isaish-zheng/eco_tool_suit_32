@@ -13,7 +13,7 @@
 import ctypes
 import os
 import tkinter as tk
-from tkinter import messagebox, ttk, Event
+from tkinter import messagebox, ttk
 
 ##############################
 # Constant definitions

@@ -3,7 +3,7 @@
 
 
 > # 本产品包含以下内容
-> * **Eco Downloader**
+> * **Eco Download**
 > * **Eco Measure&Calibrate**
 
 
@@ -13,7 +13,7 @@
 > 2. 使用uds协议下载程序
 > ## Eco Measure&Calibrate
 > 1. 使用ccp协议进行测量
-> 2. 使用ccp协议进行标定
+> 2. 使用ccp协议进行标定,支持VALUE\CURVE\MAP\VAL_BLK类型
 
 
 > # 使用说明
@@ -32,17 +32,17 @@
 >    * PCAN-UDS.dll --> Eco Tool Suit.exe同级路径 [PCAN-UDS API下载](https://peak-system.com.cn/wp-content/uploads/2023/05/PCAN-UDS.zip)
 > ## 打包方式
 > **PyInstaller**
-> * 安装pyinstaller模块，打开cmd窗口，运行以下命令
+> * 安装pyinstaller模块
 > 
 >   `pip install pyinstaller`
-> * 打包成exe，按住shift+鼠标右键弹出菜单，点击打开powershell，运行以下命令
+> * 打包成exe
 > 
 >   `pyinstaller main.py -F -w -i .\icons\Z.ico -n "Eco Tool Suit"`
 > 
 > ## 运行exe
 > * 以管理员身份运行Eco Tool Suit.exe
 > 
-> ### 使用Eco Downloader
+> ### 使用Eco Download
 > 1. 选择刷写密钥
 >   * CCP -> PG_Default.dll
 >   * UDS -> UdsSeedKeyDll.dll
@@ -52,7 +52,7 @@
 > ### 使用Eco Measure&Calibrate
 > 1. 点击打开按钮，打开程序文件(.mot)和测量标定文件(.a2l)，连接ECU
 > 2. 若要测量，在测量对象列表中选中测量对象添加至测量窗口，启动测量
-> 3. 若要标定，在标定对象列表中选中标定对象添加至标定窗口，双击修改值到RAM，可手动保存标定数据到下载文件
+> 3. 若要标定，在标定对象列表中选中标定对象添加至标定窗口，双击修改值到RAM，可手动保存标定数据到下载文件或刷写到ROM
 > 4. 退出时自动保存测量数据、标定数据，下次打开软件时自动加载
 
 > # 其它

@@ -11,15 +11,22 @@
 ##############################
 
 import base64  # Base64编码解码模块
-import tkinter
+import ctypes  # 操作系统接口模块
+import os
 from pprint import pformat  # 格式化输出模块
 from typing import Any
 
 from tkui import icon
-from tkui.tktypes import *
-from utils import singleton, pad_hex
+from tkui.tktypes import tk, ttk, GetDpiMixIn, messagebox, \
+    TkFrame, TkLabel, TkButton, TkEntry, TkTreeView, TkNotebook, \
+    FONT_BUTTON, \
+    COLOR_FRAME_BG, COLOR_LABEL_BG, COLOR_LABEL_FG, \
+    COLOR_BUTTON_BG, COLOR_BUTTON_FG, COLOR_BUTTON_ACTIVE_BG, COLOR_BUTTON_ACTIVE_FG, \
+    WIDTH_SCROLLER_BAR, WIDTH_LABEL, WIDTH_BUTTON, \
+    HEIGHT_BUTTON, HEIGHT_ENTRY
 
-from .model import *
+from .model import MeasureModel, ASAP2Calibrate, \
+    ASAP2EnumConversionType, ASAP2EnumAddrType
 from ..download.view import DownloadView
 
 
@@ -27,12 +34,12 @@ from ..download.view import DownloadView
 # View API function declarations
 ##############################
 
-class SubPropertyTipView(GetDpiMixIn):
+class SubCellTipView(GetDpiMixIn):
     """
-    属性悬浮显示窗
+    鼠标右键双击悬浮显示单元格值
 
-    :param master: 属性表格，悬浮窗将显示在此表格上
-    :type master: TkTreeView
+    :param master: 表格，悬浮窗将显示在此表格上
+    :type master: ttk.Treeview | TkTreeView
     :param text: 提示内容
     :type text: str
     :param bg: 背景颜色
@@ -40,7 +47,7 @@ class SubPropertyTipView(GetDpiMixIn):
     """
 
     def __init__(self,
-                 master: TkTreeView,
+                 master: ttk.Treeview | TkTreeView,
                  text: str = '默认信息',
                  bg: str = '#fafdc2'):
         """构造函数"""
@@ -136,6 +143,10 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
         super().__init__(master=master)
 
         self.obj = obj
+
+        self.table_property = None # 属性表格
+        self.__tip = None # 属性值悬浮显示窗
+
         self.set_root(target)
         # 子窗口捕捉所有事件
         # self.grab_set()
@@ -193,7 +204,6 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
                                          y=0,
                                          width=self.WIDTH_FRAME - WIDTH_SCROLLER_BAR,
                                          height=self.HEIGHT_FRAME - WIDTH_SCROLLER_BAR)
-        # self.table_property.column("#0", width=420, minwidth=100)
         # 设置滚动条
         self.table_property.create_scrollbar()
         # 设置表头
@@ -204,7 +214,7 @@ class SubPropertyView(tk.Toplevel, GetDpiMixIn):
         self.table_property.heading("Content", anchor='w', text="Content")
 
         # 设置属性值悬浮窗
-        self.__tip = SubPropertyTipView(master=self.table_property, bg=COLOR_LABEL_BG)
+        self.__tip = SubCellTipView(master=self.table_property, bg=COLOR_LABEL_BG)
 
     def show_property(self) -> None:
         """
@@ -249,7 +259,7 @@ class SubCalibrateValueView(GetDpiMixIn):
     """
     VALUE类型标定对象输入框
 
-    :param master: 标定表格，输入框将显示在此表格上
+    :param master: 表格，输入框将显示在此表格上
     :type master: TkTreeView | ttk.Treeview
     :param item: 标定数据项
     :type item: ASAP2Calibrate
@@ -308,7 +318,7 @@ class SubCalibrateValueView(GetDpiMixIn):
                                         font=FONT_BUTTON,
                                         textvariable=self.edit_var,
                                         width=self.width // 11,
-                                        relief=tkinter.SOLID,
+                                        relief=tk.SOLID,
                                         borderwidth=1,
                                         justify=tk.LEFT)
             self.edit_widget.bind('<FocusOut>',
@@ -335,12 +345,170 @@ class SubCalibrateValueView(GetDpiMixIn):
             self.edit_widget.place_forget()
 
 
-class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
+class SubCalibrateBlockView(tk.Toplevel, GetDpiMixIn):
     """
-    一维数据标定界面
+    数组标定界面
 
     :param master: 父窗口
-    :type master: tk.Toplevel
+    :type master: tk.Tk | tk.Toplevel
+    :param block_calibrate_dict: 数组标定对象
+    :type block_calibrate_dict: dict[str, ASAP2Calibrate]
+    :param presenter: presenter中含一系列方法，用于处理界面事件
+    :type presenter: Any
+    """
+
+    def __init__(self,
+                 master: tk.Tk | tk.Toplevel,
+                 block_calibrate_dict: dict[str, ASAP2Calibrate],
+                 presenter: Any
+                 ) -> None:
+        """构造函数"""
+        # 操作系统使用程序自身的dpi适配
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        super().__init__(master=master)
+
+        self.master = master
+        self.block_calibrate_dict = block_calibrate_dict
+        self.presenter = presenter
+
+        self.table_calibrate = None
+
+        self.set_root()
+        # 子窗口捕捉所有事件
+        # self.grab_set()
+        self.transient(master)
+
+        self.set_calibrate_frame()
+
+    def __del__(self):
+        """
+        析构函数，窗口销毁时，将table_calibrate置为None
+
+        """
+        self.table_calibrate = None
+        self.destroy()
+
+    def set_root(self) -> None:
+        """
+        设置根窗口
+
+        """
+        # 窗口标题
+        self.title(f"Block Calibrate")
+        # 窗口位置
+        self.wm_geometry("+%d+%d" % (self.master.winfo_rootx(), self.master.winfo_rooty())) # 位置
+        self.resizable(width=True, height=True) # 窗口大小可变
+        self.wm_attributes("-topmost", 1)  # 置顶
+        # 窗口点击关闭触发的功能
+        self.protocol('WM_DELETE_WINDOW', lambda: self.__del__())
+        with open('tmp.ico', 'wb') as tmp:
+            tmp.write(base64.b64decode(icon.img))
+        self.iconbitmap('tmp.ico')
+        os.remove('tmp.ico')
+
+    def set_calibrate_frame(self):
+        """
+        设置标定数据项界面
+           |    0|    1|    2|  *|
+        BLK| blk0| blk1| blk*|  *|
+
+        """
+        # 设置区域容器_表格
+        frame2 = tk.Frame(master=self,
+                          bg=COLOR_FRAME_BG,
+                          borderwidth=1)
+        # frame.pack_propagate(tk.FALSE) # 禁用传递几何位置
+        frame2.pack(expand=tk.FALSE,
+                    fill=tk.X,
+                    side=tk.TOP,
+                    anchor=tk.N)
+        # 设置区域容器_滚动条
+        frame = tk.Frame(master=self,
+                         bg=COLOR_FRAME_BG,
+                         borderwidth=1,
+                         height=super().get_dpi(WIDTH_SCROLLER_BAR))
+        # frame2.pack_propagate(tk.FALSE)  # 禁用传递几何位置
+        frame.pack(expand=tk.FALSE,
+                   fill=tk.X,
+                   side=tk.TOP,
+                   anchor=tk.N)
+
+
+        # 设置表格风格
+        style = ttk.Style()
+        style.configure("Custom.Treeview",
+                        font=FONT_BUTTON,
+                        rowheight=super().get_dpi(18))
+        # 创建表格
+        self.table_calibrate = ttk.Treeview(master=frame2,
+                                            show=["tree", "headings"],
+                                            selectmode="extended",
+                                            style="Custom.Treeview",
+                                            height=2)
+        # 设置表头
+        self.table_calibrate.column("#0", stretch=True, anchor='w',
+                                    minwidth=super().get_dpi(50),
+                                    width=super().get_dpi(300))
+        self.table_calibrate.heading("#0", anchor='w', text="Name\Index")
+        columns = [str(idx) for idx in range(len(self.block_calibrate_dict))]
+        self.table_calibrate["columns"] = columns
+        for col in columns:
+            self.table_calibrate.column(col, stretch=True, anchor='w',
+                                        minwidth=super().get_dpi(80),
+                                        width=super().get_dpi(100))
+            self.table_calibrate.heading(col, anchor='w', text=str(col))
+
+        self.table_calibrate.pack(expand=tk.TRUE,
+                                  fill=tk.X,
+                                  side=tk.LEFT,
+                                  anchor=tk.N)
+        # 创建一个水平滚动条组件，并将它与组件绑定
+        x_scrollbar = ttk.Scrollbar(master=frame,
+                                    orient='horizontal',
+                                    command=self.table_calibrate.xview)
+        x_scrollbar.pack(expand=tk.TRUE,
+                         fill=tk.X,
+                         side=tk.LEFT,
+                         anchor=tk.N)
+        self.table_calibrate.config(xscrollcommand=x_scrollbar.set)
+
+        # 鼠标事件
+        self.table_calibrate.bind("<Double-3>",
+                                  lambda e: self.__show_property(e))
+        self.table_calibrate.bind('<Double-1>',
+                                  lambda e: self.presenter.handler_on_table_block_edit(e, self.table_calibrate))
+
+    def __show_property(self, e: tk.Event):
+        """
+        根据鼠标所处单元格，显示其标定对象的属性
+
+        Args:
+            e (tk.Event): 鼠标事件
+        """
+
+        # 获取选中的单元格
+        selected_iid, selected_col, _, _ =(
+            self.presenter.get_selected_cell_in_table(e=e, table=self.table_calibrate))
+        # 未选中单元格则退出
+        if not selected_iid or not selected_col:
+            return
+        # 获取标定对象的名字
+        name = self.table_calibrate.item(selected_iid, "text")
+        suffix = f"_BLK({selected_col})"
+        # 获取标定对象
+        cal_item = self.block_calibrate_dict.get(name + suffix)
+        # 显示属性
+        SubPropertyView(master=self,
+                        obj=cal_item,
+                        target='calibrate')
+
+
+class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
+    """
+    曲线数据标定界面
+
+    :param master: 父窗口
+    :type master: tk.Tk | tk.Toplevel
     :param axis_calibrate_dict: X轴标定对象
     :type axis_calibrate_dict: dict[str, ASAP2Calibrate]
     :param value_calibrate_dict: 值标定对象
@@ -350,7 +518,7 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
     """
 
     def __init__(self,
-                 master: tk.Toplevel,
+                 master: tk.Tk | tk.Toplevel,
                  axis_calibrate_dict: dict[str, ASAP2Calibrate],
                  value_calibrate_dict: dict[str, ASAP2Calibrate],
                  presenter: Any
@@ -503,10 +671,10 @@ class SubCalibrateCurveView(tk.Toplevel, GetDpiMixIn):
 
 class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
     """
-    二维数据标定界面
+    曲面数据标定界面
 
     :param master: 父窗口
-    :type master: tk.Toplevel
+    :type master: tk.Tk | tk.Toplevel
     :param axis_calibrate_dict: X轴标定对象
     :type axis_calibrate_dict: dict[str, ASAP2Calibrate]
     :param axis2_calibrate_dict: Y轴标定对象
@@ -518,7 +686,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
     """
 
     def __init__(self,
-                 master: tk.Toplevel,
+                 master: tk.Tk | tk.Toplevel,
                  axis_calibrate_dict: dict[str, ASAP2Calibrate],
                  axis2_calibrate_dict: dict[str, ASAP2Calibrate],
                  value_calibrate_dict: dict[str, ASAP2Calibrate],
@@ -535,7 +703,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
         self.value_calibrate_dict = value_calibrate_dict
         self.presenter = presenter
 
-        self.table_calibrate = None
+        self.table_calibrate = None # 标定表格
 
         self.set_root()
         # 子窗口捕捉所有事件
@@ -646,7 +814,7 @@ class SubCalibrateMapView(tk.Toplevel, GetDpiMixIn):
 
     def __show_property(self,e):
         # 获取选中的单元格
-        selected_iid, selected_col, name, (x, y, w, h) =(
+        selected_iid, selected_col, name, _ =(
             self.presenter.get_selected_cell_in_table(e=e, table=self.table_calibrate))
         # 未选中单元格则退出
         if not selected_iid or not selected_col:
@@ -703,7 +871,10 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
         self.master = master
         self.presenter = presenter
 
-        self.table_calibrate = None
+        self.label_calibrate_number = None # 显示数目标签
+        self.btn_upload_from_ram = None # 从RAM上传按钮
+        self.btn_download_to_rom = None # 下载到ROM按钮
+        self.table_calibrate = None # 标定表格
 
         self.set_root()
         # 子窗口捕捉所有事件
@@ -717,7 +888,10 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
         析构函数，窗口销毁时，将table_calibrate置为None
 
         """
-        self.table_calibrate = None
+        self.label_calibrate_number = None # 显示数目标签
+        self.btn_upload_from_ram = None # 从RAM上传按钮
+        self.btn_download_to_rom = None # 下载到ROM按钮
+        self.table_calibrate = None # 标定表格
         self.destroy()
 
     def set_root(self) -> None:
@@ -753,7 +927,7 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
         """
 
         # 设置区域容器
-        self.__calibrate_frame = TkFrame(master=self,
+        calibrate_frame = TkFrame(master=self,
                                          bg=COLOR_FRAME_BG, borderwidth=1,
                                          x=0,
                                          y=0,
@@ -761,7 +935,7 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
                                          height=self.HEIGHT_ROOT_WINDOW)
 
         # 设置显示数目标签
-        self.label_calibrate_number = TkLabel(master=self.__calibrate_frame,
+        self.label_calibrate_number = TkLabel(master=calibrate_frame,
                                               bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
                                               text='', font=FONT_BUTTON,
                                               relief="sunken", justify='left',
@@ -772,46 +946,46 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
                                               height=HEIGHT_BUTTON)
 
         # 设置保存至文件按钮
-        self.btn_save_calibrate = TkButton(master=self.__calibrate_frame,
-                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                           borderwidth=0,
-                                           text="保存至文件", font=FONT_BUTTON,
-                                           command=lambda: self.presenter.handler_on_save_calibrate(),
-                                           x=20,
-                                           y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
-                                           width=WIDTH_BUTTON,
-                                           height=HEIGHT_BUTTON,
-                                           state='normal')
+        TkButton(master=calibrate_frame,
+                 bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                 activebackground=COLOR_BUTTON_ACTIVE_BG,
+                 activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                 borderwidth=0,
+                 text="保存至文件", font=FONT_BUTTON,
+                 command=lambda: self.presenter.handler_on_save_calibrate(),
+                 x=20,
+                 y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                 width=WIDTH_BUTTON,
+                 height=HEIGHT_BUTTON,
+                 state='normal')
 
         # 设置从RAM上传按钮
-        self.btn_upload_calibrate = TkButton(master=self.__calibrate_frame,
-                                             bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                             activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                             activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                             borderwidth=0,
-                                             text="从RAM上传", font=FONT_BUTTON,
-                                             command=lambda: self.presenter.handler_on_upload_calibrate(),
-                                             x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON * 2 - 30,
-                                             y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
-                                             width=WIDTH_BUTTON,
-                                             height=HEIGHT_BUTTON,
-                                             state='normal')
+        self.btn_upload_from_ram = TkButton(master=calibrate_frame,
+                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                            borderwidth=0,
+                                            text="从RAM上传", font=FONT_BUTTON,
+                                            command=lambda: self.presenter.handler_on_upload_calibrate(),
+                                            x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON * 2 - 30,
+                                            y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                                            width=WIDTH_BUTTON,
+                                            height=HEIGHT_BUTTON,
+                                            state='normal')
 
         # 设置刷写至ROM按钮
-        self.btn_program_calibrate = TkButton(master=self.__calibrate_frame,
-                                              bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                              activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                              activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                              borderwidth=0,
-                                              text="刷写至ROM", font=FONT_BUTTON,
-                                              command=lambda: self.presenter.handler_on_program_calibrate(),
-                                              x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON - 20,
-                                              y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
-                                              width=WIDTH_BUTTON,
-                                              height=HEIGHT_BUTTON,
-                                              state='normal')
+        self.btn_download_to_rom = TkButton(master=calibrate_frame,
+                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                            borderwidth=0,
+                                            text="刷写至ROM", font=FONT_BUTTON,
+                                            command=lambda: self.presenter.handler_on_program_calibrate(),
+                                            x=self.WIDTH_ROOT_WINDOW - WIDTH_BUTTON - 20,
+                                            y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
+                                            width=WIDTH_BUTTON,
+                                            height=HEIGHT_BUTTON,
+                                            state='normal')
 
         # 设置表格风格
         style = ttk.Style()
@@ -819,7 +993,7 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
                         font=FONT_BUTTON,
                         rowheight=super().get_dpi(18), )
         # 设置表格
-        self.table_calibrate = TkTreeView(master=self.__calibrate_frame,
+        self.table_calibrate = TkTreeView(master=calibrate_frame,
                                           show="headings",
                                           selectmode="extended",
                                           style="Custom.Treeview",
@@ -843,7 +1017,7 @@ class CalibrateView(tk.Toplevel, GetDpiMixIn):
         self.table_calibrate.heading("Unit", anchor='w', text="Unit")
 
         # 鼠标右键菜单
-        table_menu = tk.Menu(master=self.master, tearoff=False, font=FONT_BUTTON,
+        table_menu = tk.Menu(master=self.table_calibrate, tearoff=False, font=FONT_BUTTON,
                              bg=COLOR_FRAME_BG, fg='black',
                              activebackground=COLOR_BUTTON_ACTIVE_BG, activeforeground=COLOR_BUTTON_ACTIVE_FG)
         table_menu.add_command(label="删除",
@@ -884,7 +1058,10 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         self.master = master
         self.presenter = presenter
 
-        self.table_measure = None
+        self.label_measure_number = None # 显示数目标签
+        self.btn_start_measure = None # 启动按钮
+        self.btn_stop_measure = None # 停止按钮
+        self.table_measure = None # 测量表格
 
         self.set_root()
         # 子窗口捕捉所有事件
@@ -898,7 +1075,13 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         析构函数，窗口销毁时，将table_calibrate置为None
 
         """
-        self.table_measure = None
+        if self.presenter.model.obj_measure and self.presenter.model.obj_measure.has_measured:
+            self.presenter.view.show_warning("请先停止测量 ！", self)
+            return
+        self.label_measure_number = None # 显示数目标签
+        self.btn_start_measure = None # 启动按钮
+        self.btn_stop_measure = None # 停止按钮
+        self.table_measure = None # 测量表格
         self.destroy()
 
     def set_root(self) -> None:
@@ -934,15 +1117,15 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
         """
 
         # 设置区域容器
-        self.__measure_frame = TkFrame(master=self,
-                                       bg=COLOR_FRAME_BG, borderwidth=1,
-                                       x=0,
-                                       y=0,
-                                       width=self.WIDTH_ROOT_WINDOW,
-                                       height=self.HEIGHT_ROOT_WINDOW)
+        measure_frame = TkFrame(master=self,
+                                bg=COLOR_FRAME_BG, borderwidth=1,
+                                x=0,
+                                y=0,
+                                width=self.WIDTH_ROOT_WINDOW,
+                                height=self.HEIGHT_ROOT_WINDOW)
 
         # 设置显示数目标签
-        self.label_measure_number = TkLabel(master=self.__measure_frame,
+        self.label_measure_number = TkLabel(master=measure_frame,
                                             bg=COLOR_LABEL_BG, fg=COLOR_LABEL_FG, borderwidth=0,
                                             text='', font=FONT_BUTTON,
                                             relief="sunken", justify='left',
@@ -952,36 +1135,8 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                             width=WIDTH_BUTTON,
                                             height=HEIGHT_BUTTON)
 
-        # 设置连接按钮
-        self.btn_connect_measure = TkButton(master=self.__measure_frame,
-                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                            borderwidth=0,
-                                            text="连接", font=FONT_BUTTON,
-                                            command=lambda: self.presenter.handler_on_connect(),
-                                            x=20,
-                                            y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
-                                            width=WIDTH_BUTTON,
-                                            height=HEIGHT_BUTTON,
-                                            state='normal')
-
-        # 设置断开按钮
-        self.btn_disconnect_measure = TkButton(master=self.__measure_frame,
-                                               bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
-                                               activebackground=COLOR_BUTTON_ACTIVE_BG,
-                                               activeforeground=COLOR_BUTTON_ACTIVE_FG,
-                                               borderwidth=0,
-                                               text="断开", font=FONT_BUTTON,
-                                               command=lambda: self.presenter.handler_on_disconnect(),
-                                               x=110,
-                                               y=self.HEIGHT_ROOT_WINDOW - HEIGHT_BUTTON - 5,
-                                               width=WIDTH_BUTTON,
-                                               height=HEIGHT_BUTTON,
-                                               state='disabled')
-
         # 设置启动测量按钮
-        self.btn_start_measure = TkButton(master=self.__measure_frame,
+        self.btn_start_measure = TkButton(master=measure_frame,
                                           bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
                                           activebackground=COLOR_BUTTON_ACTIVE_BG,
                                           activeforeground=COLOR_BUTTON_ACTIVE_FG,
@@ -995,7 +1150,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                                           state='disabled')
 
         # 设置停止测量按钮
-        self.btn_stop_measure = TkButton(master=self.__measure_frame,
+        self.btn_stop_measure = TkButton(master=measure_frame,
                                          bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
                                          activebackground=COLOR_BUTTON_ACTIVE_BG,
                                          activeforeground=COLOR_BUTTON_ACTIVE_FG,
@@ -1014,7 +1169,7 @@ class MeasureView(tk.Toplevel, GetDpiMixIn):
                         font=FONT_BUTTON,
                         rowheight=super().get_dpi(18), )
         # 设置表格
-        self.table_measure = TkTreeView(master=self.__measure_frame,
+        self.table_measure = TkTreeView(master=measure_frame,
                                         show="headings",
                                         selectmode="extended",
                                         style="Custom.Treeview",
@@ -1061,7 +1216,7 @@ class MsrCalView(GetDpiMixIn):
     :type master: DownloadView
     """
 
-    WIDTH_SELECTION_FRAME = 400
+    WIDTH_SELECTION_FRAME = 500
     HEIGHT_SELECTION_FRAME = 600
 
     def __init__(self,
@@ -1078,6 +1233,20 @@ class MsrCalView(GetDpiMixIn):
 
         self.master = master
 
+        self.presenter = None # 视图的控制器
+        self.select_notebook = None  # 窗口管理器
+        self.btn_open = None  # 打开按钮
+        self.label_select_measure_number = None  # 选择的测量数据项数目标签
+        self.btn_connect_measure  = None # 连接按钮
+        self.btn_disconnect_measure = None # 断开按钮
+        self.btn_ack_select_measure = None # 确认选择测量数据项按钮
+        self.btn_cancel_select_measure = None # 取消选择测量数据项按钮
+        self.table_select_measure = None # 选择测量数据项表格
+        self.label_select_calibrate_number = None  # 选择的标定数据项数目标签
+        self.btn_ack_select_calibrate = None # 确认选择标定数据项按钮
+        self.btn_cancel_select_calibrate = None # 取消选择标定数据项按钮
+        self.table_select_calibrate = None # 选择标定数据项表格
+
         self.set_root()
 
     def set_presenter(self, presenter: Any) -> None:
@@ -1089,14 +1258,20 @@ class MsrCalView(GetDpiMixIn):
         """
         self.presenter = presenter
 
-    def show_warning(self, msg: str) -> None:
+    def show_warning(self,
+                     msg: str,
+                     master: tk.Tk | tk.Toplevel = None) -> None:
         """
         显示警告弹窗
 
         :param msg: 警告信息
         :type msg: str
+        :param master: 父容器
+        :type master: tk.Tk | tk.Toplevel
         """
-        messagebox.showwarning(parent=self, title='警告', message=msg)
+        messagebox.showwarning(parent=master if master else self.master,
+                               title='警告',
+                               message=msg)
 
     def set_root(self) -> None:
         """
@@ -1104,12 +1279,11 @@ class MsrCalView(GetDpiMixIn):
 
         """
         # 选择数据项窗口管理器
-        self.select_notebook = TkNotebook(master=self.master.set_msr_cal_frame(self.WIDTH_SELECTION_FRAME),
+        self.select_notebook = TkNotebook(master=self.master.set_msr_cal_frame(),
                                           x=0,
                                           y=0,
                                           width=self.WIDTH_SELECTION_FRAME,
-                                          height=self.HEIGHT_SELECTION_FRAME
-                                          )
+                                          height=self.HEIGHT_SELECTION_FRAME)
 
     def set_select_measure_frame(self, model: MeasureModel) -> None:
         """
@@ -1138,16 +1312,16 @@ class MsrCalView(GetDpiMixIn):
                                  state='normal')
 
         # 设置搜索框
-        entry_search = TkEntry(master=selection_frame,
-                               bg=COLOR_FRAME_BG, fg='black',
-                               borderwidth=1,
-                               font=FONT_BUTTON,
-                               textvariable=model.entry_search_measure_item,
-                               relief="sunken", justify='left',
-                               x=100,
-                               y=2.5,
-                               width=self.WIDTH_SELECTION_FRAME - 100 - WIDTH_BUTTON - WIDTH_SCROLLER_BAR,
-                               height=HEIGHT_ENTRY)
+        TkEntry(master=selection_frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=1,
+                font=FONT_BUTTON,
+                textvariable=model.entry_search_measure_item,
+                relief="sunken", justify='left',
+                x=100,
+                y=2.5,
+                width=self.WIDTH_SELECTION_FRAME - 100 - WIDTH_BUTTON - WIDTH_SCROLLER_BAR,
+                height=HEIGHT_ENTRY)
         # 输入内容变化时的绑定事件
         model.entry_search_measure_item.trace('w',
                                               lambda *args: self.presenter.handler_on_search_item(target='measure'))
@@ -1163,7 +1337,36 @@ class MsrCalView(GetDpiMixIn):
                                                    width=WIDTH_BUTTON,
                                                    height=HEIGHT_BUTTON)
 
-        # 设置添加按钮
+        # 设置连接按钮
+        self.btn_connect_measure = TkButton(master=selection_frame,
+                                            bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                            activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                            activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                            borderwidth=0,
+                                            text="连接", font=FONT_BUTTON,
+                                            command=lambda: self.presenter.handler_on_connect(),
+                                            x=10,
+                                            y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                            width=WIDTH_BUTTON,
+                                            height=HEIGHT_BUTTON,
+                                            state='normal')
+
+        # 设置断开按钮
+        self.btn_disconnect_measure = TkButton(master=selection_frame,
+                                               bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
+                                               activebackground=COLOR_BUTTON_ACTIVE_BG,
+                                               activeforeground=COLOR_BUTTON_ACTIVE_FG,
+                                               borderwidth=0,
+                                               text="断开", font=FONT_BUTTON,
+                                               command=lambda: self.presenter.handler_on_disconnect(),
+                                               x=WIDTH_BUTTON+20,
+                                               y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                               width=WIDTH_BUTTON,
+                                               height=HEIGHT_BUTTON,
+                                               state='disabled')
+
+
+        # 设置确认选择按钮
         self.btn_ack_select_measure = TkButton(master=selection_frame,
                                                bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
                                                activebackground=COLOR_BUTTON_ACTIVE_BG,
@@ -1171,13 +1374,13 @@ class MsrCalView(GetDpiMixIn):
                                                borderwidth=0,
                                                text="确定", font=FONT_BUTTON,
                                                command=lambda: self.presenter.handler_on_ack_select(target='measure'),
-                                               x=WIDTH_BUTTON,
+                                               x=self.WIDTH_SELECTION_FRAME-WIDTH_BUTTON*2-20,
                                                y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
                                                width=WIDTH_BUTTON,
                                                height=HEIGHT_BUTTON,
                                                state='normal')
 
-        # 设置取消按钮
+        # 设置取消选择按钮
         self.btn_cancel_select_measure = TkButton(master=selection_frame,
                                                   bg=COLOR_BUTTON_BG, fg=COLOR_BUTTON_FG,
                                                   activebackground=COLOR_BUTTON_ACTIVE_BG,
@@ -1186,7 +1389,7 @@ class MsrCalView(GetDpiMixIn):
                                                   text="取消", font=FONT_BUTTON,
                                                   command=lambda: self.presenter.handler_on_cancel_select(
                                                       target='measure'),
-                                                  x=self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON * 2,
+                                                  x=self.WIDTH_SELECTION_FRAME-WIDTH_BUTTON-10,
                                                   y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
                                                   width=WIDTH_BUTTON,
                                                   height=HEIGHT_BUTTON,
@@ -1214,10 +1417,10 @@ class MsrCalView(GetDpiMixIn):
                                        lambda e: self.presenter.handler_on_select_item(e, target='measure'))
         # 设置表头
         self.table_select_measure["columns"] = ("is_selected", "Name", "20ms", "100ms")
-        self.table_select_measure.column("is_selected", anchor='c', width=super().get_dpi(15), )  # 表示列,不显示
-        self.table_select_measure.column("Name", anchor='w', width=super().get_dpi(275))
+        self.table_select_measure.column("is_selected", anchor='c', width=super().get_dpi(25), )  # 表示列,不显示
+        self.table_select_measure.column("Name", anchor='w', width=super().get_dpi(365))
         self.table_select_measure.column("20ms", anchor='c', width=super().get_dpi(45))
-        self.table_select_measure.column("100ms", anchor='c', width=super().get_dpi(45))
+        self.table_select_measure.column("100ms", anchor='c', width=super().get_dpi(44))
         # self.table_select_measure.heading("is_selected", anchor='w', text="is_selected")  # 显示表头
         self.table_select_measure.heading("Name", anchor='w', text="Name")
         self.table_select_measure.heading("20ms", anchor='w', text="20ms")
@@ -1252,16 +1455,16 @@ class MsrCalView(GetDpiMixIn):
         # 添加到窗口管理器
         self.select_notebook.add(selection_frame, text="标定")
         # 设置搜索框
-        entry_search = TkEntry(master=selection_frame,
-                               bg=COLOR_FRAME_BG, fg='black',
-                               borderwidth=1,
-                               font=FONT_BUTTON,
-                               textvariable=model.entry_search_calibrate_item,
-                               relief="sunken", justify='left',
-                               x=100,
-                               y=2.5,
-                               width=self.WIDTH_SELECTION_FRAME - 100 - WIDTH_BUTTON - WIDTH_SCROLLER_BAR,
-                               height=HEIGHT_ENTRY)
+        TkEntry(master=selection_frame,
+                bg=COLOR_FRAME_BG, fg='black',
+                borderwidth=1,
+                font=FONT_BUTTON,
+                textvariable=model.entry_search_calibrate_item,
+                relief="sunken", justify='left',
+                x=100,
+                y=2.5,
+                width=self.WIDTH_SELECTION_FRAME - 100 - WIDTH_BUTTON - WIDTH_SCROLLER_BAR,
+                height=HEIGHT_ENTRY)
         # 输入内容变化时的绑定事件
         model.entry_search_calibrate_item.trace('w',
                                                 lambda *args: self.presenter.handler_on_search_item(target='calibrate'))
@@ -1288,8 +1491,8 @@ class MsrCalView(GetDpiMixIn):
                                                  text="确定", font=FONT_BUTTON,
                                                  command=lambda: self.presenter.handler_on_ack_select(
                                                      target='calibrate'),
-                                                 x=WIDTH_BUTTON,
-                                                 y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                                 x=self.WIDTH_SELECTION_FRAME-WIDTH_BUTTON*2-20,
+                                                 y=self.HEIGHT_SELECTION_FRAME-HEIGHT_BUTTON-25,
                                                  width=WIDTH_BUTTON,
                                                  height=HEIGHT_BUTTON,
                                                  state='normal')
@@ -1303,8 +1506,8 @@ class MsrCalView(GetDpiMixIn):
                                                     text="取消", font=FONT_BUTTON,
                                                     command=lambda: self.presenter.handler_on_cancel_select(
                                                         target='calibrate'),
-                                                    x=self.WIDTH_SELECTION_FRAME - WIDTH_BUTTON * 2,
-                                                    y=self.HEIGHT_SELECTION_FRAME - HEIGHT_BUTTON - 25,
+                                                    x=self.WIDTH_SELECTION_FRAME-WIDTH_BUTTON-10,
+                                                    y=self.HEIGHT_SELECTION_FRAME-HEIGHT_BUTTON-25,
                                                     width=WIDTH_BUTTON,
                                                     height=HEIGHT_BUTTON,
                                                     state='normal')
@@ -1331,9 +1534,9 @@ class MsrCalView(GetDpiMixIn):
                                          lambda e: self.presenter.handler_on_select_item(e, target='calibrate'))
         # 设置表头
         self.table_select_calibrate["columns"] = ("is_selected", "Name", "Check")
-        self.table_select_calibrate.column("is_selected", anchor='c', width=super().get_dpi(15))  # 表示列,不显示
-        self.table_select_calibrate.column("Name", anchor='w', width=super().get_dpi(325))
-        self.table_select_calibrate.column("Check", anchor='c', width=super().get_dpi(40))
+        self.table_select_calibrate.column("is_selected", anchor='c', width=super().get_dpi(25))  # 表示列,不显示
+        self.table_select_calibrate.column("Name", anchor='w', width=super().get_dpi(405))
+        self.table_select_calibrate.column("Check", anchor='c', width=super().get_dpi(49))
         # self.table_select_calibrate.heading("is_selected", anchor='w', text="is_selected")  # 显示表头
         self.table_select_calibrate.heading("Name", anchor='w', text="Name")
         self.table_select_calibrate.heading("Check", anchor='w', text="Check")

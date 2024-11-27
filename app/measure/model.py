@@ -687,8 +687,8 @@ class MeasureModel(object):
         self.table_history_filepath: str = 'history.dat'  # 测量标定表格历史数据保存的文件路径
         self.refresh_operate_measure_time_ms = '100'  # 存储测量表格数值刷新时间，默认100ms
         self.history_epk = ''  # 存储历史数据epk
-        self.table_measure_dict: dict[str, ASAP2Measure] = {}  # 存储测量表格当前显示的数据项内容
-        self.table_calibrate_dict: dict[str, ASAP2Calibrate] = {}
+        self.table_measure_dict: dict[str, ASAP2Measure] = {}  # 存储测量表格(VALUE)当前显示的数据项内容
+        self.table_calibrate_dict: dict[str, ASAP2Calibrate] = {} # 存储标定表格当前显示的数据项内容
 
         self.obj_measure: eco_pccp.Measure | None= None  # 存储测量对象，用于与ecu通信
         self.obj_srecord: Srecord | None= None  # 存储SRecord对象，用于解析PGM文件
@@ -738,6 +738,6 @@ class MeasureModel(object):
         # 存储线程间通信的队列,测量时的待显示数据
         self.q = Queue()
 
-        self.table_calibrate_axis_dict: dict[str, ASAP2Calibrate] = {} # 存储X轴点的标定对象
+        self.table_calibrate_axis_dict: dict[str, ASAP2Calibrate] = {} # 存储X轴点或者数组的标定对象
         self.table_calibrate_axis2_dict: dict[str, ASAP2Calibrate] = {} # 存储Y轴点的标定对象
         self.table_calibrate_value_dict: dict[str, ASAP2Calibrate] = {} # 存储值点的标定对象
