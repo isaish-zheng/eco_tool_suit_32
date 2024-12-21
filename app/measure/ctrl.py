@@ -368,9 +368,6 @@ class MeasureCtrl(object):
             try:
                 if future and future.exception():
                     raise future.exception()
-                filepath = self.handler_on_save_calibrate() # 保存标定数据
-                if filepath:
-                    self.model.opened_pgm_filepath = filepath # 更新打开的pgm文件路径，以便下次打开最新的文件
                 self.save_config()  # 保存配置
                 self.__pool_recv.shutdown(wait=False)  # 关闭线程池
                 self.__pool.shutdown(wait=False)  # 关闭线程池

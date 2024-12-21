@@ -1825,13 +1825,13 @@ class Measure(object):
             # 校验pgm中的标定数据区
             pgm_cal_1, pgm_cal_2 = self.check_pgm_cal(self.__obj_srecord, cal_page_checksum_length)
             # 比对校验结果
-            if ecu_cal_1 == pgm_cal_1 and ecu_cal_2 == pgm_cal_2:
+            if int(ecu_cal_1, 16) == int(pgm_cal_1, 16) and int(ecu_cal_2, 16) == int(pgm_cal_2, 16):
                 self.print_detail('ecu标定数据区与pgm标定数据区一致', 'done')
             else:
                 self.print_detail('ecu标定数据区与pgm标定数据区不一致', 'error')
             self.has_connected = True  # 置位连接标识
             # 返回epk
-            return ecu_epk, (ecu_cal_1 == pgm_cal_1 and ecu_cal_2 == pgm_cal_2)
+            return ecu_epk, (int(ecu_cal_1, 16) == int(pgm_cal_1, 16) and int(ecu_cal_2, 16) == int(pgm_cal_2, 16))
         except Exception as e:
             # 输出异常信息
             self.print_detail(f'发生异常 {e}', 'error')
