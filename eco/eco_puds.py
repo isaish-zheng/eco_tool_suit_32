@@ -18,8 +18,9 @@ import sys
 import traceback  # 用于获取异常详细信息
 import threading  # 用于多线程
 import time
-from typing import List, Any, NamedTuple
+from typing import List, Any, NamedTuple, Union
 
+from eco.pcandrive.PCAN_UDS_2013 import PUDS_MSGTYPE_UUDT
 from .pcandrive import pcanuds
 from srecord import Srecord
 from .seed2key import get_key_of_seed
@@ -259,6 +260,60 @@ class EcoPudsFunc(object):
         self.tester_can_id = tester_can_id
         self.ecu_can_id = ecu_can_id
         self.broadcast_can_id = broadcast_can_id
+
+    def reset(self):
+        self.obj_puds.Reset_2013(self.channel)
+
+    def create_connect(self, timeout_ms: int):
+        """
+        建立连接
+
+        :param timeout_ms: 等待响应超时时间，单位：毫秒
+        :type timeout_ms: int
+        :returns: 操作结果
+        :rtype: bool
+        """
+
+        timeout_response = ctypes.c_uint32(0)
+        status = self.obj_puds.GetValue_2013(self.channel,
+                                             pcanuds.PUDS_PARAMETER_TIMEOUT_RESPONSE,
+                                             timeout_response,
+                                             ctypes.sizeof(timeout_response))
+        if self.obj_puds.StatusIsOk_2013(status, pcanuds.PUDS_STATUS_OK, False):
+            timeout_ms = timeout_response.value
+
+        # text = pcanuds.create_string_buffer(256)
+        connected_count = 0
+        conn_start_time = time.time()
+        self.reset()
+        while True:
+            request = pcanuds.uds_msg()
+            response = pcanuds.uds_msg()
+            confirmation = pcanuds.uds_msg()
+            status = self.obj_puds.SvcDiagnosticSessionControl_2013(self.channel,
+                                                                    self.puds_msg_config,
+                                                                    request,
+                                                                    self.obj_puds.PUDS_SVC_PARAM_DSC_DS)
+            # self.obj_puds.GetErrorText_2013(status, 0x09, text, 256)
+            # msg = f'发送自定义请求消息:{text.value.decode()}'
+            # print(msg)
+
+            time.sleep(0.05)
+            status = self.obj_puds.Read_2013(self.channel, response, request, None)
+            # self.obj_puds.GetErrorText_2013(status, 0x09, text, 256)
+            # msg = f'接收自定义请求消息:{text.value.decode()}'
+            # print(msg)
+
+            if self.obj_puds.StatusIsOk_2013(status, pcanuds.PUDS_STATUS_OK, False)\
+                    and response.msg.msgdata.any.contents.data[0] == 0x50\
+                    and response.msg.msgdata.any.contents.data[1] == 0x01:
+                connected_count += 1
+            self.__free_msg([request, response, confirmation])
+            self.reset()
+            if connected_count >= 3:
+                return True
+            if time.time() - conn_start_time > timeout_ms / 1000:
+                return False
 
     def __free_msg(self, msgs: list[pcanuds.uds_msg]) -> None:
         """
@@ -1389,13 +1444,21 @@ class DownloadThread(threading.Thread):
 
             # 刷写流程
             obj_flash.set_mapping('tester')
+
+            # 建立连接
+            self.print_detail('------连接中------')
+            if not obj_flash.create_connect(10000):
+                msg = f'连接超时'
+                raise EcoPudsException(msg)
+            self.print_detail('------连接成功------','done')
+
             # 切换到默认会话
             self.print_detail('------诊断会话控制:切换到默认会话------')
-            self.print_detail('请重新上电！','warning')
             obj_flash.diagnostic_session_control(obj_flash.obj_puds.PUDS_SVC_PARAM_DSC_DS)
+            obj_flash.reset()
             obj_flash.remove_mapping_by_can_id(tester_can_id)
-
             obj_flash.set_mapping('broadcast')
+
             # 广播切换到扩展会话
             self.print_detail('------诊断会话控制:广播切换到扩展会话------')
             obj_flash.diagnostic_session_control(obj_flash.obj_puds.PUDS_SVC_PARAM_DSC_ECUEDS)
