@@ -5,7 +5,7 @@
 > # 本产品包含以下内容
 > * **Eco Download**
 > * **Eco Measure&Calibrate**
-
+![main](docs/images/main.png)
 
 > # 功能说明
 > ## Eco Downloader
@@ -22,14 +22,14 @@
 > ## Python版本(32位)
 > * **Python3.11.9** [Python解释器下载](https://www.python.org/ftp/python/3.11.9/python-3.11.9.exe)
 > ## 外部依赖（建议使用项目提供的文件）
-> 1. 安装PCAN驱动程序 [PEAK-System_Driver下载](https://peak-system.com.cn/wp-content/uploads/2024/07/PEAK-System_Driver-Setup-v4.5.0.zip)
+> 1. 安装PCAN驱动程序 [PEAK-System_Driver下载](https://peak-system.com.cn/wp-content/uploads/2025/07/PEAK-System_Driver-Setup.zip)
 > 2. 将.dll文件按照如下路径放置
->    * For x64 Windows systems [PCAN-Basic API下载](https://peak-system.com.cn/wp-content/uploads/2023/05/PCAN-Basic_Windows-4.7.zip)
->      - PCAN-Basic\x86\PCANBasic.dll --> C:\Windows\SysWOW64
->      - PCAN-Basic\x64\PCANBasic.dll --> C:\Windows\System32
->    * PCCP.dll --> Eco Tool Suit.exe同级路径 [PCAN-CCP API下载](https://peak-system.com.cn/wp-content/uploads/2022/06/PCAN-CCP.zip)
->    * PCAN-ISO-TP.dll --> Eco Tool Suit.exe同级路径 [PCAN-ISO-TP API下载](https://peak-system.com.cn/wp-content/uploads/2022/06/PCAN-ISO-TP.zip)
->    * PCAN-UDS.dll --> Eco Tool Suit.exe同级路径 [PCAN-UDS API下载](https://peak-system.com.cn/wp-content/uploads/2023/05/PCAN-UDS.zip)
+>    * For x64 Windows systems [PCAN-Basic API下载](https://peak-system.com.cn/wp-content/uploads/2025/07/PCAN-Basic.zip)
+>      - docs\LIB\PCAN-Basic\x86\PCANBasic.dll --> C:\Windows\SysWOW64
+>      - docs\LIB\PCAN-Basic\x64\PCANBasic.dll --> C:\Windows\System32
+>    * PCCP.dll --> Eco Tool Suit.exe同级路径 [PCAN-CCP API下载](https://peak-system.com.cn/wp-content/uploads/2025/07/PCAN-CCP.zip)
+>    * PCAN-ISO-TP.dll --> Eco Tool Suit.exe同级路径 [PCAN-ISO-TP API下载](https://peak-system.com.cn/wp-content/uploads/2025/07/PCAN-ISO-TP.zip)
+>    * PCAN-UDS.dll --> Eco Tool Suit.exe同级路径 [PCAN-UDS API下载](https://peak-system.com.cn/wp-content/uploads/2025/07/PCAN-UDS.zip)
 > ## 打包方式
 > **PyInstaller**
 > * 安装pyinstaller模块

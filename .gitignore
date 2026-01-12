@@ -1,9 +1,11 @@
-
 /build/
 /dist/
+/venv/
 
 /Eco Tool Suit.spec
 /cfg_download.ini
 /cfg_measure.ini
 /history.dat
 /logging.log
+/cfg_a2l.ini
+/test.py

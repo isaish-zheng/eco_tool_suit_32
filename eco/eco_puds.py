@@ -415,7 +415,7 @@ class EcoPudsFunc(object):
             print_exec_detail(msg)
             raise EcoPudsException(msg)
         # 设置通信参数
-        tmp_buffer = ctypes.c_ubyte(pcanuds.PCANTP_ISO_TIMEOUTS_15765_4)
+        tmp_buffer = ctypes.c_ubyte(pcanuds.PCANTP_ISO_TIMEOUTS_15765_2)
         status = self.obj_puds.SetValue_2013(self.channel,
                                              pcanuds.PUDS_PARAMETER_ISO_TIMEOUTS, tmp_buffer, ctypes.sizeof(tmp_buffer))
         text = pcanuds.create_string_buffer(256)

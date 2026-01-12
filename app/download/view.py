@@ -353,7 +353,7 @@ class DownloadView(tk.Tk, GetDpiMixIn):
 
         """
         msg = ('产品信息: \n'
-               '    Eco Tool Suit V2025.1.0\n'
+               '    Eco Tool Suit V2026.0.1\n'
                '    Author: ZYD\n\n'
                '本产品包含: \n'
                '    Eco Download\n'
